@@ -1,0 +1,15 @@
+# Stage 1: plain baseline (arm A). Starting values only; the tuning protocol (D-005) sets final ones.
+stage: stage1
+arm: base            # base (A) | deepsup (B) | ae (C) | meet (D)
+seed: 0
+lr: 0.001
+wd: 0.0001
+batch_size: 128
+max_steps: 6000
+eval_every: 50
+device: auto
+# loss weights (used by arms B, C, D only)
+lam_inv: 1.0
+lam_meet: 0.1
+warmup_steps: 500
+lam_aux: 0.3

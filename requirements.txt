@@ -1,0 +1,8 @@
+# Pin exact versions after the first successful environment build (decision D-001, GUIDE Section 5).
+torch>=2.1
+torchvision
+numpy
+pandas
+matplotlib
+pyyaml
+pytest

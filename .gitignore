@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+data/
+wandb/
+.DS_Store
+# NOTE: results/raw/ is committed on purpose (append-only record of every run).

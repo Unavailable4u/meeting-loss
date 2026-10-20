@@ -1,0 +1,6 @@
+## H<N>: <statement>
+- Metric(s):
+- Success threshold: <value>   (pre-registered on YYYY-MM-DD, git tag prereg-v1; post-hoc changes marked)
+- Status: open | supported | refuted | inconclusive
+- Linked findings: F-...
+- Paper sections: ...
