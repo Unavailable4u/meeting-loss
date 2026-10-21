@@ -33,7 +33,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 
 ## D-004: Four arms for the main comparison (A to D)
 - Date: 2026-10-21
-- Status: accepted
+- Status: accepted; superseded in part by D-013 (arm set expanded with controls and variants)
 - Context: To show the backward-derived target is specific (H2), we need other auxiliary losses of similar cost.
 - Decision: A = baseline (AdamW); B = deep supervision (auxiliary head on the middle state); C = autoencoder reconstruction auxiliary; D = meeting loss.
 - Alternatives considered: Baseline only (cannot support H2).
@@ -42,7 +42,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 
 ## D-005: Tuning protocol: equal trial budget per arm, selection on validation
 - Date: 2026-10-21
-- Status: accepted
+- Status: superseded by D-014
 - Context: Untuned baselines are the most common reason claimed improvements fail to replicate.
 - Decision: 20 random trials per arm (learning rate log-uniform in [1e-4, 1e-2], weight decay log-uniform in [1e-6, 1e-2], plus each arm's own loss weights), 2 seeds per trial for selection on validation, then fresh seeds for final results.
 - Alternatives considered: Fixed hyperparameters for all arms (unfair to the baseline).
@@ -102,3 +102,48 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 - Alternatives considered: Keeping the guides outside the repo (they would drift away from the project record).
 - Consequences: Reference docs get a status banner but their content is not edited. `GUIDE.md` changes go through its changelog.
 - Evidence: `docs/DOCUMENT_MAP.md`.
+
+## D-012: Contribution reframed: a compute-matched study of a target-propagation-style auxiliary loss, not a new loss
+- Date: 2026-10-21
+- Status: accepted
+- Context: The reading sprint (all five papers read) showed that our target `b = h + G(e_y) - G(p)` is the SDTP/DTP target (Bartunov et al. 2018, the SDTP target for the penultimate layer; Lee et al. 2015, Eq. 15), applied at a middle layer with `G` inverting the whole top half. DSN and Ladder Networks show auxiliary losses next to backpropagation. None of the five measures compute (FLOPs) to a target under tuned baselines. Later work also overlaps (Meulemans et al. 2020 on DTP and Gauss-Newton targets; a later difference-reconstruction loss for more backprop-aligned targets; fixed-weight DTP). See `docs/LITERATURE.md`.
+- Decision: The paper will **not** claim a new loss. The claim is a question and its evidence: does a TP-style target used as an auxiliary signal next to backpropagation improve compute-matched training efficiency against tuned baselines, when does it, and why (mechanism: gradient alignment, target diversity)? Controls address confounds (lower-layer learning-rate effect, DSN-style deep supervision, autoencoder auxiliary). A clean negative or mixed result with a diagnosis is an acceptable outcome.
+- Alternatives considered: Claiming novelty for the loss itself (rejected: not defensible given SDTP/DTP).
+- Consequences: Update the novelty statement (`docs/LITERATURE.md`), `paper/CLAIMS.md` (C-05, C-06, C-07), the Introduction and Related Work of the draft, hypotheses H2 and H5, and method v1.1. Risk R-01 is now confirmed overlap with a reframed mitigation.
+- Evidence: Bartunov 2018 (SDTP, Table 1), Lee 2015 (Eq. 15, Theorems 1 and 2), DSN 2014, Ladder 2015, Schmidt 2021; DR-002.
+
+## D-013: Arms, controls, and variants (supersedes D-004 in part)
+- Date: 2026-10-21
+- Status: accepted
+- Context: H2 needs fair alternatives, and H5 needs controls for confounds. The reading sprint also showed that implementations differ between papers and code.
+- Decision: Main comparison (Stage 3): **A** baseline; **B** DSN-style deep supervision (primary implementation "B-paper": cross-entropy companion head on the middle state with the companion weight decaying linearly to zero and an optional hinge threshold `aux_gamma`); **C** autoencoder-reconstruction auxiliary; **D** meeting loss (default configuration). Controls: **E** = arm A plus a learning-rate multiplier `low_lr_mult` on the lower layers; **F** = exact-gradient target (`meet_grad`, DTP-style target `h - eta*dL/dh`). Pre-listed variants of D (maximum 3, see `docs/PLAN.md`): **V1** noise in the inverse loss (`sigma_inv > 0`, as in DTP and SDTP); **V2** AO-D, augmented output: `G` also receives fixed random features `z` of `h` (Bartunov's AO-SDTP idea); **V3** frozen random `G` (no inverse loss, inspired by fixed-weight DTP). A secondary implementation of B, **B-code** (constant companion weight with a decaying learning rate on the companion head, following the DSN reference code), is logged as a baseline-implementation variant and does not count against the D-variant limit. Activation function `act` in {relu, tanh} is a categorical hyperparameter of every arm (Lee et al. found ReLU hurt TP while backprop prefers ReLU, so fixing one would be unfair).
+- Alternatives considered: Only arms A to D (cannot rule out a pure learning-rate effect); running every variant (forking paths).
+- Consequences: Code supports all arms via `arm` and config keys (`src/model.py`, `src/train.py`). Note: with AdamW, control F rescales the lower-layer gradient, which Adam largely normalizes away, so F is most informative under SGD with momentum (H4); under AdamW control E is the one that changes the effective step size.
+- Evidence: `docs/notes/dsn-reference-notes.md`, `docs/LITERATURE.md`, Bartunov 2018 (AO-SDTP), Lee 2015 (tanh vs ReLU).
+
+## D-014: Tuning and evaluation protocol updates (supersedes D-005)
+- Date: 2026-10-21
+- Status: accepted
+- Context: Crowded Valley (Schmidt et al. 2021) shows learning-rate schedules add several percent on median, tuning budget changes rankings, and re-tuning the same optimizer shifts results by about as much as swapping optimizers.
+- Decision: (1) **25** random-search trials per arm (parity with Crowded Valley's small budget), 2 seeds per trial for selection on validation, then **10** fresh seeds for final results. (2) Search space for every arm: learning rate log-uniform in [1e-4, 1e-2], weight decay log-uniform in [1e-6, 1e-2], `act` in {relu, tanh}, learning-rate schedule in {constant, cosine}; arm-specific: `lam_meet` log-uniform in [1e-3, 10], `lam_inv` log-uniform in [0.1, 10], `warmup_steps` in {200, 500, 1000}, `lam_aux` log-uniform in [1e-2, 1], `aux_gamma` in {0, small}, `sigma_inv` in [0.01, 0.3], `low_lr_mult` log-uniform in [0.5, 8]. (3) **Re-tuning noise floor:** tune arm A twice with fully independent seeds; the gain of any arm must exceed the shift between the two tunings, and both are reported. (4) Wall-clock reported separately from FLOPs.
+- Alternatives considered: Keeping 20 trials and a constant learning rate (weaker baselines, and Crowded Valley suggests gains could be an artifact).
+- Consequences: `docs/GUIDE.md` Section 5 updated (v1.2); `scripts/run_sweep.py` to be written with these ranges; the search-space numbers are starting values and are finalized before the `prereg-v1` lock.
+- Evidence: Schmidt et al. 2021 (Sections 2.3, 3, Appendix D); DR-002.
+
+## D-015: Exploratory versus confirmatory findings
+- Date: 2026-10-21
+- Status: accepted
+- Context: Exploring many variants and settings finds real discoveries but also noise. We expect to discover things we did not plan for and want to keep them without letting them leak into claims.
+- Decision: Every entry in `EXPERIMENT_LOG.md` and `FINDINGS.md` carries a **Type**: `confirmatory` (tests a pre-registered hypothesis from the `prereg-v1` tag, with fresh seeds), `exploratory`, or `verification` (a deterministic check that tests no hypothesis, such as a FLOP count or a unit test). Paper claims may only rest on confirmatory or verification evidence. An exploratory discovery becomes a claim only after a pre-planned confirmatory run with fresh seeds, planned and logged before that run.
+- Alternatives considered: No distinction (risks reporting noise as findings).
+- Consequences: Templates updated (`docs/templates/`); `GUIDE.md` Section 4 gains a subsection; `CLAIMS.md` evidence entries must be confirmatory or verification.
+- Evidence: `docs/GUIDE.md` Section 4 (pre-registration lock and forking paths).
+
+## D-016: Third-party reference code (DSN) is used as a specification only; licensing noted
+- Date: 2026-10-21
+- Status: accepted
+- Context: The DSN reference repository is an old Caffe fork. Its license permits educational, research, and non-profit use; commercial use requires contacting UC San Diego's technology transfer office. The paper's first page also notes a patent disclosure.
+- Decision: Reimplement arm B in PyTorch from the paper and from `docs/notes/dsn-reference-notes.md`; do not copy the code. Keep the license note visible. Before any commercial use of DSN-style code or ideas, check with the university.
+- Alternatives considered: Running or vendoring the Caffe code (impractical and carries license obligations).
+- Consequences: Risk R-11 added.
+- Evidence: DSN repository LICENSE and README (read 2026-10-21).

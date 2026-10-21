@@ -1,6 +1,6 @@
 # Meeting Loss: a bidirectional learning signal for faster neural network training
 
-**Status:** Stage 0 (project setup). See `docs/PLAN.md` for the live status.
+**Status:** Stage 1 in progress, method v1.1 (see `docs/PLAN.md` for the live status).
 **Started:** 2026-10-21
 
 ## What this project is
@@ -10,6 +10,8 @@ A research project asking one question:
 > Can a *meeting loss*, which compares the forward-computed middle state of a network with a middle state back-calculated from the known target, give lower layers a shorter and better learning signal, so a model reaches the same quality in fewer steps and FLOPs than a tuned baseline?
 
 Version 1 adds the meeting loss as an **auxiliary** signal next to ordinary backpropagation, tests it at small scale (MNIST, then CIFAR-10, then a modular-arithmetic task), and measures efficiency as steps and FLOPs to a target accuracy. The goal is a rigorous, honest paper, whether the result is positive, mixed, or negative.
+
+**Honest framing (D-012):** after reading the prior work, the loss turned out to be the simplified difference target propagation (SDTP) target applied at a middle layer. We do not claim a new loss. The contribution is a compute-matched study of using that target as an auxiliary signal next to backpropagation, with controls and a mechanism diagnosis. See `docs/LITERATURE.md`.
 
 ## Start here (reading order for a newcomer, about 30 minutes)
 
@@ -37,6 +39,7 @@ meeting-loss/
 ├── README.md              you are here
 ├── CLAUDE.md              instructions for AI coding assistants working in this repo
 ├── docs/                  all planning, decisions, findings (see DOCUMENT_MAP.md)
+│   ├── notes/             reading notes on papers and reference code
 │   ├── reference/         background documents (historical; do not edit, supersede instead)
 │   └── templates/         blank templates for every kind of entry
 ├── paper/                 draft, claims register, figure map, bibliography

@@ -1,0 +1,9 @@
+arm,flops_per_step,overhead_vs_A_pct
+base,155058176,0.0
+deepsup,156041216,0.63
+ae,334364672,115.64
+meet,190578688,22.91
+meet+sigma_inv,208666624,34.57
+meet_ao,224133120,44.55
+meet_frozen,173146112,11.67
+meet_grad,164102144,5.83

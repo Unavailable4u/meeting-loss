@@ -1,0 +1,1332 @@
+From 5a7e5d7918558127f4f661ef2fa3c9a957e8b8e4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 21 Oct 2026 18:06:18 +0000
+Subject: [PATCH 1/2] Method v1.1: arms E/F, variants V1-V3, B-paper/B-code,
+ act and schedules, optimizer groups; 12 new tests; FLOP-overhead script and
+ table (D-013, D-014)
+
+---
+ configs/README.md                         |   2 +-
+ configs/template_all_options.yaml         |  26 ++++
+ results/processed/flops_overhead_v1.1.csv |   9 ++
+ scripts/flops_overhead.py                 |  50 +++++++
+ src/diagnostics.py                        |  28 ++--
+ src/model.py                              | 125 ++++++++++++----
+ src/train.py                              |  64 +++++++--
+ tests/test_variants.py                    | 165 ++++++++++++++++++++++
+ 8 files changed, 417 insertions(+), 52 deletions(-)
+ create mode 100644 configs/template_all_options.yaml
+ create mode 100644 results/processed/flops_overhead_v1.1.csv
+ create mode 100644 scripts/flops_overhead.py
+ create mode 100644 tests/test_variants.py
+
+diff --git a/configs/README.md b/configs/README.md
+index ca64ced..7228d04 100644
+--- a/configs/README.md
++++ b/configs/README.md
+@@ -1,3 +1,3 @@
+ # Configs
+ 
+-One YAML file per experiment family. Every run is launched from a config; the config, its hash, and the git commit are written to the header line of the raw result file. Do not edit a config that has already been used for logged runs: copy it to a new file instead.
++One YAML file per experiment family. Every run is launched from a config; the config, its hash, and the git commit are written to the header line of the raw result file. Do not edit a config that has already been used for logged runs: copy it to a new file instead. `template_all_options.yaml` lists every key with its default (method v1.1).
+diff --git a/configs/template_all_options.yaml b/configs/template_all_options.yaml
+new file mode 100644
+index 0000000..f5c7f12
+--- /dev/null
++++ b/configs/template_all_options.yaml
+@@ -0,0 +1,26 @@
++# Template listing EVERY config key with its default (method v1.1, docs/METHOD.md).
++# Copy this file to a new config for each experiment family. Do not edit configs that were
++# already used for logged runs (e.g. stage1_baseline.yaml).
++stage: stage2                  # used in the run id
++arm: meet                      # base (A) | deepsup (B) | ae (C) | meet (D) | meet_ao (V2) | meet_frozen (V3) | meet_grad (F)
++seed: 0
++act: relu                      # relu | tanh  (categorical hyperparameter of every arm, D-013)
++lr: 0.001
++wd: 0.0001
++batch_size: 128
++max_steps: 6000
++eval_every: 50
++device: auto
++lr_schedule: constant          # constant | cosine   (D-014)
++low_lr_mult: 1.0               # control E: lr multiplier on the lower layers (any arm)
++# meeting-loss arms (meet, meet_ao, meet_frozen, meet_grad)
++lam_meet: 0.1
++lam_inv: 1.0                   # ignored by meet_frozen / meet_grad
++warmup_steps: 500
++sigma_inv: 0.0                 # V1: > 0 adds noise to the inverse loss (denoising), meet / meet_ao only
++eta_hat: 0.1                   # meet_grad only: target = h - eta_hat * per-sample dL/dh
++# auxiliary-loss arms (deepsup B, ae C)
++lam_aux: 0.3
++aux_sched: const               # const | linear (decays to zero over max_steps, DSN paper)
++aux_gamma: 0.0                 # deepsup: companion loss counts only above this threshold (DSN paper)
++aux_lr_decay: none             # none | power_inv (DSN reference code, companion head only)
+diff --git a/results/processed/flops_overhead_v1.1.csv b/results/processed/flops_overhead_v1.1.csv
+new file mode 100644
+index 0000000..b8912bb
+--- /dev/null
++++ b/results/processed/flops_overhead_v1.1.csv
+@@ -0,0 +1,9 @@
++arm,flops_per_step,overhead_vs_A_pct
++base,155058176,0.0
++deepsup,156041216,0.63
++ae,334364672,115.64
++meet,190578688,22.91
++meet+sigma_inv,208666624,34.57
++meet_ao,224133120,44.55
++meet_frozen,173146112,11.67
++meet_grad,164102144,5.83
+diff --git a/scripts/flops_overhead.py b/scripts/flops_overhead.py
+new file mode 100644
+index 0000000..e57d1f2
+--- /dev/null
++++ b/scripts/flops_overhead.py
+@@ -0,0 +1,50 @@
++"""Per-step FLOP overhead of every arm relative to arm A (deterministic count, no data needed).
++
++Usage: python scripts/flops_overhead.py [--batch-size 128] [--out results/processed/flops_overhead_v1.1.csv]
++Counts one full training step (forward + backward, including G, heads, and extra forwards) with
++torch.utils.flop_counter. Optimizer FLOPs are ignored. Settings that change the count:
++sigma_inv > 0 adds an extra forward through the upper half and through G.
++"""
++import argparse
++import csv
++import pathlib
++import sys
++
++import torch
++
++sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from anywhere
++
++from src.flops import flops_per_step
++from src.model import MeetNet
++
++CFG = dict(lam_inv=1.0, lam_meet=0.1, warmup_steps=1, lam_aux=0.3, eta_hat=0.1,
++           max_steps=100, lr=1e-3, wd=1e-4)
++ROWS = [("base", {}), ("deepsup", {}), ("ae", {}), ("meet", {}), ("meet", {"sigma_inv": 0.1}),
++        ("meet_ao", {}), ("meet_frozen", {}), ("meet_grad", {})]
++
++
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--batch-size", type=int, default=128)
++    ap.add_argument("--out", default="results/processed/flops_overhead_v1.1.csv")
++    args = ap.parse_args()
++    g = torch.Generator().manual_seed(0)
++    batch = (torch.randn(args.batch_size, 784, generator=g), torch.randint(0, 10, (args.batch_size,), generator=g))
++    out, base = [], None
++    for arm, extra in ROWS:
++        cfg = {**CFG, **extra}
++        model = MeetNet(arm=arm)
++        opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
++        f = flops_per_step(model, opt, batch, cfg)
++        base = f if base is None else base
++        name = arm + ("+sigma_inv" if extra else "")
++        out.append(dict(arm=name, flops_per_step=f, overhead_vs_A_pct=round(100 * (f / base - 1), 2)))
++        print(f"{name:18s} {f:>14,d}  {100 * (f / base - 1):+7.2f}%")
++    with open(args.out, "w", newline="") as fh:
++        w = csv.DictWriter(fh, fieldnames=["arm", "flops_per_step", "overhead_vs_A_pct"], lineterminator="\n")
++        w.writeheader()
++        w.writerows(out)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/diagnostics.py b/src/diagnostics.py
+index 866061f..7baae51 100644
+--- a/src/diagnostics.py
++++ b/src/diagnostics.py
+@@ -1,22 +1,22 @@
+-"""Diagnostics for H3 (gradient alignment) and for collapse. UNTESTED starter code."""
++"""Diagnostics for H3 (gradient alignment) and for collapse. Uses the same code path as training."""
+ import torch
+ import torch.nn.functional as F
+ 
++from src.model import compute_losses
+ 
+-def grad_alignment(model, x, y):
+-    """Cosine similarity between the task gradient and the meeting gradient
+-    on the lower layers (arm D only)."""
++_DEFAULT_CFG = dict(lam_inv=1.0, lam_meet=0.1, warmup_steps=1, lam_aux=0.0)
++
++
++def grad_alignment(model, x, y, cfg=None):
++    """Cosine similarity between the task gradient and the meeting-loss gradient on the lower
++    layers. Returns NaN for arms without a meeting loss."""
++    if not hasattr(model, "G") and model.arm != "meet_grad":
++        return float("nan")
++    cfg = {**_DEFAULT_CFG, **(cfg or {})}
+     params = list(model.low.parameters())
+-    h = model.low(x)
+-    z = model.up(h)
+-    L_task = F.cross_entropy(z, y)
+-    p = z.detach().softmax(-1)
+-    with torch.no_grad():
+-        e_y = F.one_hot(y, model.n_cls).float()
+-        b = h.detach() + model.G(e_y) - model.G(p)
+-    L_meet = F.mse_loss(h, b)
+-    g_task = torch.autograd.grad(L_task, params, retain_graph=True)
+-    g_meet = torch.autograd.grad(L_meet, params)
++    _, parts, _, _ = compute_losses(model, x, y, cfg, step=10**9)
++    g_task = torch.autograd.grad(parts["task"], params, retain_graph=True)
++    g_meet = torch.autograd.grad(parts["meet"], params, retain_graph=True)
+     flat = lambda gs: torch.cat([g.reshape(-1) for g in gs])
+     return F.cosine_similarity(flat(g_task), flat(g_meet), dim=0).item()
+ 
+diff --git a/src/model.py b/src/model.py
+index b5618b2..feb08a2 100644
+--- a/src/model.py
++++ b/src/model.py
+@@ -1,69 +1,138 @@
+-"""Model and losses for the meeting-loss project.
++"""Model and losses for the meeting-loss project (method v1.1, see docs/METHOD.md).
+ 
+-UNTESTED starter code: run `pytest` (Stage 2 of docs/PLAN.md) before trusting any result.
+-The method is defined in docs/METHOD.md. If this file and METHOD.md disagree, that is a
+-drift event (docs/DRIFT_LOG.md).
++Arms (docs/DECISIONS.md D-013):
++  base         A  plain network
++  deepsup      B  DSN-style deep supervision: companion CE head on the middle state
++  ae           C  autoencoder-reconstruction auxiliary on the middle state
++  meet         D  meeting loss (SDTP-style target at the middle layer), default configuration
++  meet_ao      V2 meeting loss, augmented output: G also sees fixed random features of h
++  meet_frozen  V3 meeting loss with a frozen random G and no inverse loss
++  meet_grad    F  control: DTP-style exact-gradient target  h - eta * dL/dh
++Variant V1 (noise in the inverse loss) is the config key `sigma_inv > 0` on meet / meet_ao.
++Control E (lower-layer learning-rate multiplier) is the config key `low_lr_mult` (see src/train.py).
++
++If this file and docs/METHOD.md disagree, that is a drift event (docs/DRIFT_LOG.md).
+ """
+ import torch
+ import torch.nn as nn
+ import torch.nn.functional as F
+ 
++MEET_ARMS = ("meet", "meet_ao", "meet_frozen")
++ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad",)
+ 
+-class MeetNet(nn.Module):
+-    """MLP split at a middle layer, with extra modules per experimental arm.
+ 
+-    arm: "base" (A), "deepsup" (B), "ae" (C), "meet" (D)
+-    """
++def _act(name):
++    if name == "relu":
++        return nn.ReLU()
++    if name == "tanh":
++        return nn.Tanh()
++    raise ValueError(f"unknown activation: {name}")
++
+ 
+-    def __init__(self, d_in=784, d_hid=256, d_mid=128, n_cls=10, arm="meet"):
++class MeetNet(nn.Module):
++    """MLP split at a middle layer, with extra modules per experimental arm."""
++
++    def __init__(self, d_in=784, d_hid=256, d_mid=128, n_cls=10, arm="meet", act="relu", d_aux=128):
+         super().__init__()
+-        self.arm, self.n_cls = arm, n_cls
+-        self.low = nn.Sequential(nn.Linear(d_in, d_hid), nn.ReLU(), nn.Linear(d_hid, d_mid))
+-        self.up = nn.Sequential(nn.ReLU(), nn.Linear(d_mid, d_hid), nn.ReLU(), nn.Linear(d_hid, n_cls))
+-        if arm == "meet":
+-            self.G = nn.Sequential(nn.Linear(n_cls, d_hid), nn.ReLU(), nn.Linear(d_hid, d_mid))
++        if arm not in ARMS:
++            raise ValueError(f"unknown arm: {arm}")
++        self.arm, self.n_cls, self.d_aux = arm, n_cls, d_aux
++        self.low = nn.Sequential(nn.Linear(d_in, d_hid), _act(act), nn.Linear(d_hid, d_mid))
++        self.up = nn.Sequential(_act(act), nn.Linear(d_mid, d_hid), _act(act), nn.Linear(d_hid, n_cls))
++        if arm in MEET_ARMS:
++            g_in = n_cls + (d_aux if arm == "meet_ao" else 0)
++            self.G = nn.Sequential(nn.Linear(g_in, d_hid), _act(act), nn.Linear(d_hid, d_mid))
++            if arm == "meet_ao":
++                # fixed random features of h (not trained, not a parameter): Bartunov et al. 2018, AO-SDTP
++                self.register_buffer("R", torch.randn(d_mid, d_aux) / d_mid ** 0.5)
++            if arm == "meet_frozen":
++                self.G.requires_grad_(False)  # frozen random feedback network (no inverse loss)
+         elif arm == "deepsup":
+             self.aux = nn.Linear(d_mid, n_cls)
+         elif arm == "ae":
+-            self.dec = nn.Sequential(nn.Linear(d_mid, d_hid), nn.ReLU(), nn.Linear(d_hid, d_in))
+-        elif arm != "base":
+-            raise ValueError(f"unknown arm: {arm}")
++            self.dec = nn.Sequential(nn.Linear(d_mid, d_hid), _act(act), nn.Linear(d_hid, d_in))
+ 
+     def forward(self, x):
+         return self.up(self.low(x))
+ 
+ 
++def _g_in(model, p, h_ref):
++    """Input to the backward network G: class probabilities (or one-hot labels), plus
++    fixed random features of h for the augmented-output variant."""
++    if model.arm == "meet_ao":
++        return torch.cat([p, torch.tanh(h_ref @ model.R)], dim=-1)
++    return p
++
++
++def _aux_weight(cfg, step):
++    """Weight of the auxiliary loss at this step (arms B and C).
++    aux_sched: "const" (default) or "linear" (decays to zero over max_steps, as in the DSN paper)."""
++    base = cfg.get("lam_aux", 0.0)
++    if cfg.get("aux_sched", "const") == "linear":
++        return base * max(0.0, 1.0 - step / max(1, cfg.get("max_steps", 1)))
++    return base
++
++
+ def compute_losses(model, x, y, cfg, step):
+     """Returns (total_loss, dict_of_parts, h, z).
+ 
+-    cfg keys: lam_inv, lam_meet, warmup_steps, lam_aux.
++    cfg keys used: lam_inv, lam_meet, warmup_steps (meet arms); lam_aux, aux_sched, aux_gamma,
++    max_steps (arms B, C); sigma_inv (V1); eta_hat (meet_grad). Missing optional keys default
++    to the values in docs/METHOD.md.
+     """
+     h = model.low(x)
+     z = model.up(h)
+     parts = {"task": F.cross_entropy(z, y)}
+     total = parts["task"]
++    ramp = min(1.0, step / max(1, cfg.get("warmup_steps", 1)))
+ 
+-    if model.arm == "meet":
++    if model.arm in MEET_ARMS:
+         h_d = h.detach()
+         p = z.detach().softmax(-1)
+         e_y = F.one_hot(y, model.n_cls).float()
+-        gp = model.G(p)                              # trained via L_inv
+-        L_inv = F.mse_loss(gp, h_d)
+-        with torch.no_grad():                        # the target is a constant
+-            b = h_d + model.G(e_y) - gp.detach()
+-        L_meet = F.mse_loss(h, b)                    # gradient reaches F_low only
+-        ramp = min(1.0, step / max(1, cfg["warmup_steps"]))
+-        total = total + cfg["lam_inv"] * L_inv + cfg["lam_meet"] * ramp * L_meet
++        sigma = cfg.get("sigma_inv", 0.0)
++
++        if model.arm == "meet_frozen":
++            with torch.no_grad():
++                b = h_d + model.G(_g_in(model, e_y, h_d)) - model.G(_g_in(model, p, h_d))
++            L_inv = torch.zeros((), device=h.device)
++            lam_inv = 0.0
++        elif sigma == 0.0:
++            gp = model.G(_g_in(model, p, h_d))           # trained via L_inv
++            L_inv = F.mse_loss(gp, h_d)
++            with torch.no_grad():                        # the target is a constant
++                b = h_d + model.G(_g_in(model, e_y, h_d)) - gp.detach()
++            lam_inv = cfg["lam_inv"]
++        else:                                            # V1: denoising inverse (DTP/SDTP)
++            with torch.no_grad():
++                b = h_d + model.G(_g_in(model, e_y, h_d)) - model.G(_g_in(model, p, h_d))
++                h_t = h_d + sigma * torch.randn_like(h_d)
++                p_t = model.up(h_t).softmax(-1)
++            L_inv = F.mse_loss(model.G(_g_in(model, p_t, h_t)), h_t)
++            lam_inv = cfg["lam_inv"]
++
++        L_meet = F.mse_loss(h, b)                        # gradient reaches F_low only
++        total = total + lam_inv * L_inv + cfg["lam_meet"] * ramp * L_meet
+         parts.update(inv=L_inv, meet=L_meet)
+ 
++    elif model.arm == "meet_grad":
++        # Control F: DTP-style target built from the exact gradient (per-sample units).
++        g_h = torch.autograd.grad(parts["task"], h, retain_graph=True)[0]
++        b = (h - cfg.get("eta_hat", 0.1) * h.shape[0] * g_h).detach()
++        L_meet = F.mse_loss(h, b)
++        total = total + cfg["lam_meet"] * ramp * L_meet
++        parts["meet"] = L_meet
++
+     elif model.arm == "deepsup":
+         L_aux = F.cross_entropy(model.aux(h), y)
+-        total = total + cfg["lam_aux"] * L_aux
++        gamma = cfg.get("aux_gamma", 0.0)
++        L_eff = F.relu(L_aux - gamma) if gamma > 0 else L_aux   # companion loss vanishes below gamma
++        total = total + _aux_weight(cfg, step) * L_eff
+         parts["aux"] = L_aux
+ 
+     elif model.arm == "ae":
+         L_aux = F.mse_loss(model.dec(h), x)
+-        total = total + cfg["lam_aux"] * L_aux
++        total = total + _aux_weight(cfg, step) * L_aux
+         parts["aux"] = L_aux
+ 
+     return total, parts, h, z
+diff --git a/src/train.py b/src/train.py
+index 0ec7ea9..74da703 100644
+--- a/src/train.py
++++ b/src/train.py
+@@ -1,13 +1,15 @@
+-"""Training loop and CLI. UNTESTED starter code (docs/RISKS.md R-10).
++"""Training loop and CLI (method v1.1).
+ 
+ Usage:  python -m src.train --config configs/stage1_baseline.yaml [--seed 1]
+ Writes an append-only run log to results/raw/<run_id>.jsonl (first line = header with the
+ config, config hash and git commit). Never edit raw results by hand.
++See configs/template_all_options.yaml for every config key.
+ """
+ import argparse
+ import datetime
+ import hashlib
+ import json
++import math
+ import pathlib
+ import subprocess
+ import time
+@@ -15,10 +17,9 @@ import time
+ import torch
+ import yaml
+ 
+-from src.data import get_data
+ from src.diagnostics import grad_alignment, mid_state_variance
+ from src.flops import flops_per_step
+-from src.model import MeetNet, compute_losses
++from src.model import MEET_ARMS, MeetNet, compute_losses
+ from src.utils import set_seed
+ 
+ 
+@@ -34,11 +35,55 @@ def evaluate(model, loader, device):
+     return correct / n
+ 
+ 
+-def run(cfg, device="cpu"):
++def lr_factors(cfg):
++    """Learning-rate factors as functions of the step, for (low, rest, aux) parameter groups.
++
++    lr_schedule:  "constant" (default) or "cosine" (decays to zero over max_steps).
++    aux_lr_decay: "none" (default) or "power_inv" (DSN reference code: (1 + 1e-4*step)^-0.75 on
++                  the companion head, on top of the base schedule).
++    """
++    T = max(1, cfg.get("max_steps", 1))
++    if cfg.get("lr_schedule", "constant") == "cosine":
++        base = lambda s: 0.5 * (1.0 + math.cos(math.pi * min(1.0, s / T)))
++    else:
++        base = lambda s: 1.0
++    if cfg.get("aux_lr_decay", "none") == "power_inv":
++        aux = lambda s: base(s) * (1.0 + 1e-4 * s) ** -0.75
++    else:
++        aux = base
++    return base, base, aux
++
++
++def build_optimizer(model, cfg):
++    """AdamW with parameter groups: lower layers (lr * low_lr_mult, control E), all other
++    trainable parameters, and the companion head of arm B in its own group. With default
++    settings this is mathematically identical to one AdamW over model.parameters()."""
++    lr = cfg["lr"]
++    low = list(model.low.parameters())
++    aux = list(model.aux.parameters()) if hasattr(model, "aux") else []
++    skip = {id(p) for p in low + aux}
++    rest = [p for p in model.parameters() if p.requires_grad and id(p) not in skip]
++    f_low, f_rest, f_aux = lr_factors(cfg)
++    entries = [(low, lr * cfg.get("low_lr_mult", 1.0), f_low), (rest, lr, f_rest)]
++    if aux:
++        entries.append((aux, lr, f_aux))
++    entries = [e for e in entries if e[0]]             # drop empty groups
++    opt = torch.optim.AdamW([dict(params=ps, lr=l) for ps, l, _ in entries],
++                            lr=lr, weight_decay=cfg["wd"])
++    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=[f for _, _, f in entries])
++    return opt, sched
++
++
++def run(cfg, device="cpu", data=None):
++    """Train one run. `data` may be a (train_loader, val_loader) pair (used by tests);
++    by default the fixed MNIST split from src/data.py (decision D-008) is loaded."""
+     set_seed(cfg["seed"])
+-    train_loader, val_loader = get_data(cfg["batch_size"], cfg["seed"])
+-    model = MeetNet(arm=cfg["arm"]).to(device)
+-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["wd"])
++    if data is None:
++        from src.data import get_data               # imported lazily: needs torchvision
++        data = get_data(cfg["batch_size"], cfg["seed"])
++    train_loader, val_loader = data
++    model = MeetNet(arm=cfg["arm"], act=cfg.get("act", "relu")).to(device)
++    opt, sched = build_optimizer(model, cfg)
+     bx, by = next(iter(train_loader))
+     fps = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg)
+ 
+@@ -50,13 +95,14 @@ def run(cfg, device="cpu"):
+             opt.zero_grad(set_to_none=True)
+             loss.backward()
+             opt.step()
++            sched.step()
+             step += 1
+             if step % cfg["eval_every"] == 0:
+                 row = dict(step=step, flops=step * fps, time=time.time() - t0,
+                            val_acc=evaluate(model, val_loader, device),
+                            **{k: v.item() for k, v in parts.items()})
+-                if cfg["arm"] == "meet":
+-                    row["align"] = grad_alignment(model, x, y)
++                if cfg["arm"] in MEET_ARMS or cfg["arm"] == "meet_grad":
++                    row["align"] = grad_alignment(model, x, y, cfg)
+                     row["h_var"] = mid_state_variance(model, x)
+                 log.append(row)
+             if step >= cfg["max_steps"]:
+diff --git a/tests/test_variants.py b/tests/test_variants.py
+new file mode 100644
+index 0000000..3e69b5c
+--- /dev/null
++++ b/tests/test_variants.py
+@@ -0,0 +1,165 @@
++"""Tests for method v1.1: arms, variants, controls, optimizer groups, schedules, smoke runs.
++Run with: pytest"""
++import math
++
++import torch
++import torch.nn.functional as F
++from torch.utils.data import DataLoader, TensorDataset
++
++from src.diagnostics import grad_alignment
++from src.model import ARMS, MEET_ARMS, MeetNet, compute_losses
++from src.train import build_optimizer, lr_factors, run, steps_to_target
++
++CFG = dict(lam_inv=1.0, lam_meet=0.1, warmup_steps=1, lam_aux=0.3, eta_hat=0.1,
++           max_steps=100, lr=1e-3, wd=1e-4)
++
++
++def batch(n=32, seed=0):
++    g = torch.Generator().manual_seed(seed)
++    return torch.randn(n, 784, generator=g), torch.randint(0, 10, (n,), generator=g)
++
++
++def test_all_arms_run_and_backward():
++    x, y = batch()
++    for arm in ARMS:
++        torch.manual_seed(0)
++        m = MeetNet(arm=arm)
++        total, parts, h, z = compute_losses(m, x, y, CFG, step=10)
++        assert torch.isfinite(total), arm
++        total.backward()
++        assert all(p.grad is not None for p in m.low.parameters()), arm
++
++
++def test_tanh_option_has_no_relu():
++    m = MeetNet(arm="meet", act="tanh")
++    mods = list(m.modules())
++    assert any(isinstance(k, torch.nn.Tanh) for k in mods)
++    assert not any(isinstance(k, torch.nn.ReLU) for k in mods)
++
++
++def test_inverse_loss_gradient_reaches_only_G():
++    x, y = batch()
++    for cfg in (CFG, {**CFG, "sigma_inv": 0.1}):
++        m = MeetNet(arm="meet")
++        _, parts, _, _ = compute_losses(m, x, y, cfg, step=10)
++        parts["inv"].backward()
++        assert all(p.grad is not None for p in m.G.parameters())
++        assert all(p.grad is None for p in m.low.parameters())
++        assert all(p.grad is None for p in m.up.parameters())
++
++
++def test_meet_gradient_reaches_only_low_for_variants():
++    x, y = batch()
++    for arm, extra in (("meet", {"sigma_inv": 0.1}), ("meet_ao", {}), ("meet_frozen", {})):
++        m = MeetNet(arm=arm)
++        _, parts, _, _ = compute_losses(m, x, y, {**CFG, **extra}, step=10)
++        parts["meet"].backward()
++        assert all(p.grad is not None for p in m.low.parameters()), arm
++        assert all(p.grad is None for p in m.up.parameters()), arm
++        assert all(p.grad is None for p in m.G.parameters()), arm
++
++
++def test_ao_variant_input_and_fixed_features():
++    m = MeetNet(arm="meet_ao", d_aux=64)
++    assert m.G[0].in_features == m.n_cls + 64
++    assert "R" not in dict(m.named_parameters())          # a buffer, never trained
++    R0 = m.R.clone()
++    x, y = batch()
++    opt, _ = build_optimizer(m, {**CFG, "lr": 1e-2})
++    total, *_ = compute_losses(m, x, y, CFG, step=10)
++    total.backward()
++    opt.step()
++    assert torch.equal(m.R, R0)
++
++
++def test_frozen_G_is_not_updated_and_has_no_inverse_loss():
++    m = MeetNet(arm="meet_frozen")
++    assert all(not p.requires_grad for p in m.G.parameters())
++    G0 = [p.detach().clone() for p in m.G.parameters()]
++    x, y = batch()
++    opt, _ = build_optimizer(m, {**CFG, "lr": 1e-2})
++    total, parts, _, _ = compute_losses(m, x, y, CFG, step=10)
++    assert parts["inv"].item() == 0.0
++    total.backward()
++    opt.step()
++    assert all(torch.equal(a, b) for a, b in zip(G0, m.G.parameters()))
++
++
++def test_exact_gradient_target_is_parallel_to_task_gradient():
++    x, y = batch()
++    m = MeetNet(arm="meet_grad")
++    _, parts, h, _ = compute_losses(m, x, y, CFG, step=10)
++    g_task = torch.autograd.grad(parts["task"], h, retain_graph=True)[0]
++    g_meet = torch.autograd.grad(parts["meet"], h, retain_graph=True)[0]
++    cos = F.cosine_similarity(g_task.flatten(), g_meet.flatten(), dim=0)
++    assert cos.item() > 0.999
++
++
++def test_deep_supervision_schedule_and_threshold():
++    x, y = batch()
++    m = MeetNet(arm="deepsup")
++    cfg = {**CFG, "aux_sched": "linear", "max_steps": 100}
++    t0, p0, _, _ = compute_losses(m, x, y, cfg, step=0)
++    t1, p1, _, _ = compute_losses(m, x, y, cfg, step=100)
++    assert t0.item() > p0["task"].item() + 1e-6            # companion loss active at step 0
++    assert math.isclose(t1.item(), p1["task"].item(), rel_tol=1e-6)   # decayed to zero
++    t2, p2, _, _ = compute_losses(m, x, y, {**CFG, "aux_gamma": 1e6}, step=0)
++    assert math.isclose(t2.item(), p2["task"].item(), rel_tol=1e-6)   # below threshold: vanishes
++
++
++def test_default_optimizer_matches_plain_adamw():
++    x, y = batch()
++    def train(grouped):
++        torch.manual_seed(3)
++        m = MeetNet(arm="base")
++        if grouped:
++            opt, sched = build_optimizer(m, CFG)
++        else:
++            opt, sched = torch.optim.AdamW(m.parameters(), lr=CFG["lr"], weight_decay=CFG["wd"]), None
++        for s in range(5):
++            total, *_ = compute_losses(m, x, y, CFG, step=s)
++            opt.zero_grad()
++            total.backward()
++            opt.step()
++            if sched:
++                sched.step()
++        return [p.detach().clone() for p in m.parameters()]
++    a, b = train(True), train(False)
++    assert all(torch.allclose(p, q, atol=1e-7) for p, q in zip(a, b))
++
++
++def test_low_lr_multiplier_and_schedules():
++    m = MeetNet(arm="base")
++    opt, _ = build_optimizer(m, {**CFG, "low_lr_mult": 4.0})
++    lrs = sorted(g["lr"] for g in opt.param_groups)
++    assert math.isclose(lrs[0], CFG["lr"]) and math.isclose(lrs[-1], 4 * CFG["lr"])
++    base, _, aux = lr_factors({**CFG, "lr_schedule": "cosine", "aux_lr_decay": "power_inv", "max_steps": 100})
++    assert math.isclose(base(0), 1.0) and base(100) < 1e-9 and base(30) > base(60)
++    assert aux(50) < base(50)
++
++
++def _loaders(n=256, seed=0):
++    g = torch.Generator().manual_seed(seed)
++    x = torch.randn(n, 784, generator=g)
++    y = torch.randint(0, 10, (n,), generator=g)
++    return (DataLoader(TensorDataset(x, y), batch_size=32, shuffle=True,
++                       generator=torch.Generator().manual_seed(seed), drop_last=True),
++            DataLoader(TensorDataset(x[:64], y[:64]), batch_size=64))
++
++
++def test_smoke_run_every_arm():
++    for arm in ARMS:
++        cfg = {**CFG, "arm": arm, "seed": 0, "batch_size": 32, "max_steps": 30, "eval_every": 10,
++               "lr_schedule": "cosine", "act": "tanh"}
++        log = run(cfg, device="cpu", data=_loaders())
++        assert len(log) == 3, arm
++        assert all(math.isfinite(r["val_acc"]) and r["flops"] > 0 for r in log), arm
++        assert log[-1]["flops"] > log[0]["flops"], arm
++        if arm in MEET_ARMS or arm == "meet_grad":
++            assert all(math.isfinite(r["align"]) for r in log), arm
++        assert steps_to_target(log, 2.0) is None
++
++
++def test_grad_alignment_is_nan_without_meeting_loss():
++    x, y = batch()
++    assert math.isnan(grad_alignment(MeetNet(arm="base"), x, y, CFG))
+-- 
+2.43.0
+
+
+From cdaea3c3e98f98894d80cc2fa442c03d7ae11457 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 21 Oct 2026 18:06:18 +0000
+Subject: [PATCH 2/2] Docs: fold reading sprint into the plan (DR-002; D-012 to
+ D-016; LITERATURE, notes, HYPOTHESES H5, RISKS R-11..R-17, FINDINGS
+ F-001..F-003, METHOD v1.1, GUIDE v1.2)
+
+---
+ CLAUDE.md                          |  4 +-
+ README.md                          |  5 +-
+ docs/DECISIONS.md                  | 49 +++++++++++++++++-
+ docs/DOCUMENT_MAP.md               |  1 +
+ docs/DRIFT_LOG.md                  |  8 +++
+ docs/EXPERIMENT_LOG.md             |  5 +-
+ docs/FINDINGS.md                   | 27 +++++++++-
+ docs/GUIDE.md                      | 17 ++++++-
+ docs/HYPOTHESES.md                 | 18 +++++--
+ docs/LITERATURE.md                 | 81 ++++++++++++------------------
+ docs/METHOD.md                     | 41 ++++++++++++++-
+ docs/PLAN.md                       | 35 +++++--------
+ docs/RISKS.md                      | 15 ++++--
+ docs/notes/dsn-reference-notes.md  | 29 +++++++++++
+ docs/templates/experiment-entry.md |  1 +
+ docs/templates/finding-entry.md    |  1 +
+ paper/CLAIMS.md                    | 10 ++--
+ paper/PAPER_DRAFT.md               | 10 ++--
+ 18 files changed, 259 insertions(+), 98 deletions(-)
+ create mode 100644 docs/notes/dsn-reference-notes.md
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index a50eb95..76f5c63 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -19,9 +19,11 @@ You are a research engineering assistant on a small, rigorous research project.
+ 5. **Follow the drift protocol** (`docs/GUIDE.md`, Section 4) whenever a trigger fires, and update documents in the order given there.
+ 6. **Fair comparisons only:** equal tuning budget per arm, equal compute (count FLOPs including the backward network), selection on validation only, fixed split, test set used once at the very end.
+ 7. **Report honestly.** Negative and inconclusive results get the same detail as positive ones. If a result looks too good to be true, say so and look for the bug first.
+-8. **The starter code in `src/` is untested** until the Stage 2 tests pass. Run the tests and fix problems before trusting any result.
++8. **Treat `src/` as under test.** The tests pass as of method v1.1, but arm D and the variants have only been smoke-tested on synthetic data. Run the tests and fix problems before trusting any result.
+ 9. **Reproducibility:** every run uses a YAML config, logs the git commit and seed, and writes raw results to `results/raw/` (append-only, never hand-edited).
+ 10. **Commit docs together with the work** that changed them. Mention drift IDs in commit messages.
++11. **Label every experiment and finding with a Type** (`confirmatory`, `exploratory`, `verification`; D-015). Paper claims rest only on confirmatory or verification evidence.
++12. **Run `pytest` first** (17 tests as of method v1.1) and again after any change to `src/`.
+ 
+ ## At the end of every session
+ 
+diff --git a/README.md b/README.md
+index 59c740c..2a9b392 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # Meeting Loss: a bidirectional learning signal for faster neural network training
+ 
+-**Status:** Stage 0 (project setup). See `docs/PLAN.md` for the live status.
++**Status:** Stage 1 in progress, method v1.1 (see `docs/PLAN.md` for the live status).
+ **Started:** 2026-10-21
+ 
+ ## What this project is
+@@ -11,6 +11,8 @@ A research project asking one question:
+ 
+ Version 1 adds the meeting loss as an **auxiliary** signal next to ordinary backpropagation, tests it at small scale (MNIST, then CIFAR-10, then a modular-arithmetic task), and measures efficiency as steps and FLOPs to a target accuracy. The goal is a rigorous, honest paper, whether the result is positive, mixed, or negative.
+ 
++**Honest framing (D-012):** after reading the prior work, the loss turned out to be the simplified difference target propagation (SDTP) target applied at a middle layer. We do not claim a new loss. The contribution is a compute-matched study of using that target as an auxiliary signal next to backpropagation, with controls and a mechanism diagnosis. See `docs/LITERATURE.md`.
++
+ ## Start here (reading order for a newcomer, about 30 minutes)
+ 
+ 1. This README.
+@@ -37,6 +39,7 @@ meeting-loss/
+ ├── README.md              you are here
+ ├── CLAUDE.md              instructions for AI coding assistants working in this repo
+ ├── docs/                  all planning, decisions, findings (see DOCUMENT_MAP.md)
++│   ├── notes/             reading notes on papers and reference code
+ │   ├── reference/         background documents (historical; do not edit, supersede instead)
+ │   └── templates/         blank templates for every kind of entry
+ ├── paper/                 draft, claims register, figure map, bibliography
+diff --git a/docs/DECISIONS.md b/docs/DECISIONS.md
+index 4062be2..4d56c89 100644
+--- a/docs/DECISIONS.md
++++ b/docs/DECISIONS.md
+@@ -33,7 +33,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
+ 
+ ## D-004: Four arms for the main comparison (A to D)
+ - Date: 2026-10-21
+-- Status: accepted
++- Status: accepted; superseded in part by D-013 (arm set expanded with controls and variants)
+ - Context: To show the backward-derived target is specific (H2), we need other auxiliary losses of similar cost.
+ - Decision: A = baseline (AdamW); B = deep supervision (auxiliary head on the middle state); C = autoencoder reconstruction auxiliary; D = meeting loss.
+ - Alternatives considered: Baseline only (cannot support H2).
+@@ -42,7 +42,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
+ 
+ ## D-005: Tuning protocol: equal trial budget per arm, selection on validation
+ - Date: 2026-10-21
+-- Status: accepted
++- Status: superseded by D-014
+ - Context: Untuned baselines are the most common reason claimed improvements fail to replicate.
+ - Decision: 20 random trials per arm (learning rate log-uniform in [1e-4, 1e-2], weight decay log-uniform in [1e-6, 1e-2], plus each arm's own loss weights), 2 seeds per trial for selection on validation, then fresh seeds for final results.
+ - Alternatives considered: Fixed hyperparameters for all arms (unfair to the baseline).
+@@ -102,3 +102,48 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
+ - Alternatives considered: Keeping the guides outside the repo (they would drift away from the project record).
+ - Consequences: Reference docs get a status banner but their content is not edited. `GUIDE.md` changes go through its changelog.
+ - Evidence: `docs/DOCUMENT_MAP.md`.
++
++## D-012: Contribution reframed: a compute-matched study of a target-propagation-style auxiliary loss, not a new loss
++- Date: 2026-10-21
++- Status: accepted
++- Context: The reading sprint (all five papers read) showed that our target `b = h + G(e_y) - G(p)` is the SDTP/DTP target (Bartunov et al. 2018, the SDTP target for the penultimate layer; Lee et al. 2015, Eq. 15), applied at a middle layer with `G` inverting the whole top half. DSN and Ladder Networks show auxiliary losses next to backpropagation. None of the five measures compute (FLOPs) to a target under tuned baselines. Later work also overlaps (Meulemans et al. 2020 on DTP and Gauss-Newton targets; a later difference-reconstruction loss for more backprop-aligned targets; fixed-weight DTP). See `docs/LITERATURE.md`.
++- Decision: The paper will **not** claim a new loss. The claim is a question and its evidence: does a TP-style target used as an auxiliary signal next to backpropagation improve compute-matched training efficiency against tuned baselines, when does it, and why (mechanism: gradient alignment, target diversity)? Controls address confounds (lower-layer learning-rate effect, DSN-style deep supervision, autoencoder auxiliary). A clean negative or mixed result with a diagnosis is an acceptable outcome.
++- Alternatives considered: Claiming novelty for the loss itself (rejected: not defensible given SDTP/DTP).
++- Consequences: Update the novelty statement (`docs/LITERATURE.md`), `paper/CLAIMS.md` (C-05, C-06, C-07), the Introduction and Related Work of the draft, hypotheses H2 and H5, and method v1.1. Risk R-01 is now confirmed overlap with a reframed mitigation.
++- Evidence: Bartunov 2018 (SDTP, Table 1), Lee 2015 (Eq. 15, Theorems 1 and 2), DSN 2014, Ladder 2015, Schmidt 2021; DR-002.
++
++## D-013: Arms, controls, and variants (supersedes D-004 in part)
++- Date: 2026-10-21
++- Status: accepted
++- Context: H2 needs fair alternatives, and H5 needs controls for confounds. The reading sprint also showed that implementations differ between papers and code.
++- Decision: Main comparison (Stage 3): **A** baseline; **B** DSN-style deep supervision (primary implementation "B-paper": cross-entropy companion head on the middle state with the companion weight decaying linearly to zero and an optional hinge threshold `aux_gamma`); **C** autoencoder-reconstruction auxiliary; **D** meeting loss (default configuration). Controls: **E** = arm A plus a learning-rate multiplier `low_lr_mult` on the lower layers; **F** = exact-gradient target (`meet_grad`, DTP-style target `h - eta*dL/dh`). Pre-listed variants of D (maximum 3, see `docs/PLAN.md`): **V1** noise in the inverse loss (`sigma_inv > 0`, as in DTP and SDTP); **V2** AO-D, augmented output: `G` also receives fixed random features `z` of `h` (Bartunov's AO-SDTP idea); **V3** frozen random `G` (no inverse loss, inspired by fixed-weight DTP). A secondary implementation of B, **B-code** (constant companion weight with a decaying learning rate on the companion head, following the DSN reference code), is logged as a baseline-implementation variant and does not count against the D-variant limit. Activation function `act` in {relu, tanh} is a categorical hyperparameter of every arm (Lee et al. found ReLU hurt TP while backprop prefers ReLU, so fixing one would be unfair).
++- Alternatives considered: Only arms A to D (cannot rule out a pure learning-rate effect); running every variant (forking paths).
++- Consequences: Code supports all arms via `arm` and config keys (`src/model.py`, `src/train.py`). Note: with AdamW, control F rescales the lower-layer gradient, which Adam largely normalizes away, so F is most informative under SGD with momentum (H4); under AdamW control E is the one that changes the effective step size.
++- Evidence: `docs/notes/dsn-reference-notes.md`, `docs/LITERATURE.md`, Bartunov 2018 (AO-SDTP), Lee 2015 (tanh vs ReLU).
++
++## D-014: Tuning and evaluation protocol updates (supersedes D-005)
++- Date: 2026-10-21
++- Status: accepted
++- Context: Crowded Valley (Schmidt et al. 2021) shows learning-rate schedules add several percent on median, tuning budget changes rankings, and re-tuning the same optimizer shifts results by about as much as swapping optimizers.
++- Decision: (1) **25** random-search trials per arm (parity with Crowded Valley's small budget), 2 seeds per trial for selection on validation, then **10** fresh seeds for final results. (2) Search space for every arm: learning rate log-uniform in [1e-4, 1e-2], weight decay log-uniform in [1e-6, 1e-2], `act` in {relu, tanh}, learning-rate schedule in {constant, cosine}; arm-specific: `lam_meet` log-uniform in [1e-3, 10], `lam_inv` log-uniform in [0.1, 10], `warmup_steps` in {200, 500, 1000}, `lam_aux` log-uniform in [1e-2, 1], `aux_gamma` in {0, small}, `sigma_inv` in [0.01, 0.3], `low_lr_mult` log-uniform in [0.5, 8]. (3) **Re-tuning noise floor:** tune arm A twice with fully independent seeds; the gain of any arm must exceed the shift between the two tunings, and both are reported. (4) Wall-clock reported separately from FLOPs.
++- Alternatives considered: Keeping 20 trials and a constant learning rate (weaker baselines, and Crowded Valley suggests gains could be an artifact).
++- Consequences: `docs/GUIDE.md` Section 5 updated (v1.2); `scripts/run_sweep.py` to be written with these ranges; the search-space numbers are starting values and are finalized before the `prereg-v1` lock.
++- Evidence: Schmidt et al. 2021 (Sections 2.3, 3, Appendix D); DR-002.
++
++## D-015: Exploratory versus confirmatory findings
++- Date: 2026-10-21
++- Status: accepted
++- Context: Exploring many variants and settings finds real discoveries but also noise. We expect to discover things we did not plan for and want to keep them without letting them leak into claims.
++- Decision: Every entry in `EXPERIMENT_LOG.md` and `FINDINGS.md` carries a **Type**: `confirmatory` (tests a pre-registered hypothesis from the `prereg-v1` tag, with fresh seeds), `exploratory`, or `verification` (a deterministic check that tests no hypothesis, such as a FLOP count or a unit test). Paper claims may only rest on confirmatory or verification evidence. An exploratory discovery becomes a claim only after a pre-planned confirmatory run with fresh seeds, planned and logged before that run.
++- Alternatives considered: No distinction (risks reporting noise as findings).
++- Consequences: Templates updated (`docs/templates/`); `GUIDE.md` Section 4 gains a subsection; `CLAIMS.md` evidence entries must be confirmatory or verification.
++- Evidence: `docs/GUIDE.md` Section 4 (pre-registration lock and forking paths).
++
++## D-016: Third-party reference code (DSN) is used as a specification only; licensing noted
++- Date: 2026-10-21
++- Status: accepted
++- Context: The DSN reference repository is an old Caffe fork. Its license permits educational, research, and non-profit use; commercial use requires contacting UC San Diego's technology transfer office. The paper's first page also notes a patent disclosure.
++- Decision: Reimplement arm B in PyTorch from the paper and from `docs/notes/dsn-reference-notes.md`; do not copy the code. Keep the license note visible. Before any commercial use of DSN-style code or ideas, check with the university.
++- Alternatives considered: Running or vendoring the Caffe code (impractical and carries license obligations).
++- Consequences: Risk R-11 added.
++- Evidence: DSN repository LICENSE and README (read 2026-10-21).
+diff --git a/docs/DOCUMENT_MAP.md b/docs/DOCUMENT_MAP.md
+index b8cdb30..8c2b949 100644
+--- a/docs/DOCUMENT_MAP.md
++++ b/docs/DOCUMENT_MAP.md
+@@ -55,6 +55,7 @@ In words:
+ | What have we run, and with what result? | `docs/EXPERIMENT_LOG.md` |
+ | What do we currently believe, and how sure are we? | `docs/FINDINGS.md` |
+ | What does related work say, and how do we differ? | `docs/LITERATURE.md` |
++| What exactly did a specific paper or reference repo say (details, numbers, caveats)? | `docs/notes/` (for example `dsn-reference-notes.md`) and the rows in `docs/LITERATURE.md` |
+ | What could go wrong? | `docs/RISKS.md` |
+ | What changed from the original plan, and what did it touch? | `docs/DRIFT_LOG.md` |
+ | What is the paper saying, and is every claim backed? | `paper/PAPER_DRAFT.md` and `paper/CLAIMS.md` |
+diff --git a/docs/DRIFT_LOG.md b/docs/DRIFT_LOG.md
+index f817cef..844f083 100644
+--- a/docs/DRIFT_LOG.md
++++ b/docs/DRIFT_LOG.md
+@@ -12,3 +12,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
+ - Docs updated: [x] PLAN  [x] HYPOTHESES  [x] METHOD  [x] FINDINGS (none yet)  [x] LITERATURE  [x] RISKS  [x] CLAIMS  [x] PAPER_DRAFT  [x] FIGURES
+ - Other: status banner added to the top of `docs/reference/01-proposal-and-starting-guide.md` (content otherwise frozen); `GUIDE.md` changelog entry v1.1.
+ - Experiments invalidated or needing rerun: none (no experiments yet)
++
++## DR-002: Reading sprint changed the contribution framing, arm set, and tuning protocol; exploratory/confirmatory rule added
++- Date: 2026-10-21
++- Trigger: 7 (related work overlaps the claim), 2 (method change), 3 (baselines and tuning protocol change), 8 (variants to explore)
++- What changed: before: "meeting loss" presented as the idea, arms A to D, 20 trials per arm, constant learning rate, no noise-floor check. After: contribution reframed as a compute-matched study of a TP-style auxiliary target (D-012); arms A to F plus three pre-listed variants of D and one baseline-implementation variant of B (D-013); 25 trials, schedules, activation as hyperparameters, re-tuning noise floor, 10 final seeds (D-014); exploratory versus confirmatory labeling (D-015); DSN used as specification only (D-016).
++- Decision recorded: D-012, D-013, D-014, D-015, D-016 (D-004 partly and D-005 superseded)
++- Docs updated: [x] PLAN  [x] HYPOTHESES  [x] METHOD (v1.1)  [x] FINDINGS (F-001, F-002 from E-001)  [x] LITERATURE  [x] RISKS  [x] CLAIMS  [x] PAPER_DRAFT  [x] FIGURES (unchanged)  [x] GUIDE (v1.2)  [x] DOCUMENT_MAP and README (docs/notes/)
++- Experiments invalidated or needing rerun: none. E-001 (untuned arm A) stays valid as baseline characterization; it will be superseded as the baseline by the tuned arm A from the D-014 protocol.
+diff --git a/docs/EXPERIMENT_LOG.md b/docs/EXPERIMENT_LOG.md
+index 8682415..fb1f549 100644
+--- a/docs/EXPERIMENT_LOG.md
++++ b/docs/EXPERIMENT_LOG.md
+@@ -9,12 +9,13 @@ Rules:
+ 
+ ---
+ 
+-No entries yet.
+ ## E-001: Stage 1 untuned baseline (arm A), 5 seeds
+ - Date / Stage / Hypothesis tested (H-ID): 2026-10-21 / Stage 1 / none (baseline characterisation)
++- Type: exploratory (baseline characterisation; no hypothesis tested; added by DR-002 / D-015)
+ - Git commit / config file(s) / seeds: see `git_commit` in each run header / configs/stage1_baseline.yaml / seeds 0-4
+ - Reproduce with: `for s in 0 1 2 3 4; do python -m src.train --config configs/stage1_baseline.yaml --seed $s; done`
+ - Result summary: final val_acc 0.9730-0.9798 (mean 0.9769, sd ~0.0025); steps to 0.97: 850-1200 (median 900); steps to 0.975: 1400-1750 (mean 1600); 155,058,176 FLOPs/step; ~460 s per run on CPU (raw: results/raw/20261021_stage1_base_s{0..4}.jsonl)
+ - Valid: yes
+ - Interpretation: Untuned baseline is reproducible across seeds and sits just under the ~98% gate. Curves are noisy around 97.5-98%, so 0.97 and 0.975 are more stable steps-to-target candidates than 0.98. Validation sampling error (~0.2 points) is comparable to seed spread.
+-- Follow-ups: run the equal-budget tuning protocol (D-005) for arm A; finalize D-003 targets after tuning; check whether all seeds reach 0.98 at any point.
+\ No newline at end of file
++- Follow-ups: run the equal-budget tuning protocol (D-005) for arm A; finalize D-003 targets after tuning; check whether all seeds reach 0.98 at any point.
++- Note (2026-10-21, DR-002): the tuning protocol is now D-014, which supersedes D-005. E-001 remains valid as an untuned baseline characterisation.
+diff --git a/docs/FINDINGS.md b/docs/FINDINGS.md
+index 663c7e7..609ce8e 100644
+--- a/docs/FINDINGS.md
++++ b/docs/FINDINGS.md
+@@ -10,4 +10,29 @@ Rules:
+ 
+ ---
+ 
+-No findings yet.
++## F-001: The FLOP counter matches the analytic count for arm A
++- Type: verification (deterministic check; tests no hypothesis)
++- Status: supported
++- Confidence: high (exact match)
++- Evidence: E-001 (logged 155,058,176 FLOPs/step at batch size 128). Analytic count for the 784-256-128-256-10 MLP: forward 2*128*268,800 = 68,812,800; weight gradients 68,812,800; input gradients for layers 2 to 4 only, 2*128*68,096 = 17,432,576 (layer 1 needs none); total 155,058,176.
++- Scope: arm A, this architecture, batch size 128, optimizer FLOPs excluded.
++- Implications: FLOPs-to-target comparisons across arms can use `src/flops.py`. Satisfies the intent of Stage 1's "FLOP counter verified" exit criterion and Stage 2 test 5.
++- Found / last re-verified: 2026-10-21
++
++## F-002: Untuned baseline is reproducible; 0.97 and 0.975 are usable targets, 0.98 is too noisy on a 5,000-sample validation set
++- Type: exploratory
++- Status: tentative
++- Confidence: medium-low (untuned baseline only, 5 seeds)
++- Evidence: E-001. Final validation accuracy 0.9769 (sd 0.0022, 5 seeds). Steps to 0.97: 900, 1200, 950, 900, 850 (mean 960, sd 124). Steps to 0.975: 1700, 1750, 1600, 1550, 1400 (mean 1600, sd 123). Steps to 0.98: 4300, 5750, never, 4000, 2200 (4 of 5 seeds). Binomial sampling error of accuracy at 0.975 with n = 5,000 is about 0.22 points, the same size as the seed-to-seed spread.
++- Scope: arm A, constant learning rate 1e-3, AdamW, batch 128, ReLU MLP, fixed 55k/5k split.
++- Implications: D-003 should use 0.97 and 0.975 (and report 0.98 only as secondary). Consider whether a larger validation split (for example 50k/10k) is worth a new decision superseding part of D-008, because a 0.2-point sampling error limits what differences can be resolved. Re-check after arm A is tuned (D-014).
++- Found / last re-verified: 2026-10-21
++
++## F-003: Per-step FLOP overhead of each arm relative to arm A
++- Type: verification (deterministic count)
++- Status: supported
++- Confidence: high (counted, not sampled; independent of batch size because all costs scale linearly with it)
++- Evidence: `scripts/flops_overhead.py`, output `results/processed/flops_overhead_v1.1.csv`. Overhead vs arm A: deepsup +0.63%, ae +115.64%, meet +22.91%, meet with sigma_inv +34.57%, meet_ao +44.55%, meet_frozen +11.67%, meet_grad +5.83%.
++- Scope: this MLP (784-256-128-256-10, `d_aux` 128), one training step including all extra forwards and backwards, optimizer FLOPs excluded.
++- Implications: to win at equal FLOPs, arm D must reduce steps-to-target by more than about 19% (1 - 1/1.2291) just to break even on FLOPs. The autoencoder arm C is costly because it reconstructs the 784-dimensional input. The frozen-G variant V3 is the cheapest meeting-loss variant. This sharpens risk R-02.
++- Found / last re-verified: 2026-10-21
+diff --git a/docs/GUIDE.md b/docs/GUIDE.md
+index 414833c..8b3661f 100644
+--- a/docs/GUIDE.md
++++ b/docs/GUIDE.md
+@@ -316,6 +316,16 @@ Before the Stage 3 main runs: commit `HYPOTHESES.md`, `METHOD.md`, and decisions
+ 
+ Trying many variants until one works produces false positives. Rules: set a maximum number of variants per stage in `PLAN.md`; log every variant tried, including failures; report all of them in the paper's appendix.
+ 
++### Exploratory versus confirmatory findings (added v1.2, D-015)
++
++Every entry in `EXPERIMENT_LOG.md` and `FINDINGS.md` carries a **Type**:
++
++- `confirmatory`: tests a hypothesis pre-registered under the `prereg-v1` tag, with fresh seeds.
++- `exploratory`: anything else, including surprises found while exploring variants or settings. Record it; it may be real.
++- `verification`: a deterministic check that tests no hypothesis (a FLOP count, a unit test).
++
++Paper claims (`paper/CLAIMS.md`) may only rest on `confirmatory` or `verification` evidence. An exploratory discovery becomes a claim only after a confirmatory run with fresh seeds, planned and logged **before** that run. The templates in `docs/templates/` include the Type field and take precedence over the template copies in Section 3.
++
+ ---
+ 
+ ## 5. Environment and engineering standards
+@@ -337,7 +347,7 @@ Trying many variants until one works produces false positives. Rules: set a maxi
+ 
+ ### Fair-comparison rules
+ 
+-- **Equal tuning budget.** Every arm gets the same number of tuning trials. Suggested: 20 random trials per arm, drawing learning rate log-uniformly in [1e-4, 1e-2], weight decay in [1e-6, 1e-2], plus each arm's own loss weights (arms B, C, D). Use 2 seeds per trial for selection, then fresh seeds for final results.
++- **Equal tuning budget.** Every arm gets the same number of tuning trials. Current protocol (v1.2, D-014, supersedes the earlier 20-trial suggestion): 25 random trials per arm, drawing learning rate log-uniformly in [1e-4, 1e-2], weight decay in [1e-6, 1e-2], activation in {relu, tanh}, learning-rate schedule in {constant, cosine}, plus each arm's own loss weights (see D-014 for ranges). Use 2 seeds per trial for selection, then 10 fresh seeds for final results. Also run the **re-tuning noise floor**: tune arm A a second time with fully independent seeds, and require any gain to exceed the shift between the two tunings.
+ - **Equal compute.** Compare at equal FLOPs, counting the backward network and any auxiliary heads. Report wall-clock time separately.
+ - **Selection on validation only.**
+ - **Seeds.** At least 5 for early comparisons, and at least 10 for headline results (MNIST is cheap enough).
+@@ -415,7 +425,9 @@ Timelines are rough and assume part-time work. Adjust them, and write the real d
+ | A | Baseline: plain network, AdamW |
+ | B | Deep supervision: auxiliary classifier head on the middle state, weight `λ_aux` |
+ | C | Autoencoder auxiliary: decoder reconstructs `x` from the middle state, weight `λ_aux` |
+-| D | Meeting loss (Section 2) |
++| D | Meeting loss (Section 2; see `docs/METHOD.md` v1.1 for variants) |
++| E | Control: arm A plus a lower-layer learning-rate multiplier (`low_lr_mult`), D-013 |
++| F | Control: exact-gradient target (`meet_grad`), D-013 |
+ 
+ **Tasks**
+ 
+@@ -945,3 +957,4 @@ Titles, years, and venues below are from memory and may contain small errors. Ve
+ |---|---|---|---|
+ | 1.0 | 2026-10-21 | Initial guide | none |
+ | 1.1 | 2026-10-21 | Repo created. Layout gains `CLAUDE.md`, `docs/DOCUMENT_MAP.md`, `docs/reference/`. Starter code placed in `src/` and `tests/`. Method now maintained in `docs/METHOD.md` (Section 2 is the v1.0 snapshot). | D-009, D-010, D-011, DR-001 |
++| 1.2 | 2026-10-21 | Reading sprint folded in: contribution reframed, arms E and F, variants, 25-trial protocol with schedules and noise floor, exploratory versus confirmatory rule, `docs/notes/`. See `docs/METHOD.md` v1.1. | D-012 to D-016, DR-002 |
+diff --git a/docs/HYPOTHESES.md b/docs/HYPOTHESES.md
+index 3777d09..010e027 100644
+--- a/docs/HYPOTHESES.md
++++ b/docs/HYPOTHESES.md
+@@ -1,6 +1,6 @@
+ # Hypotheses
+ 
+-**Pre-registration status:** NOT LOCKED. Thresholds below are *proposed*. They are finalized in D-003 after Stage 1 (when the baseline numbers are known) and locked with git tag `prereg-v1` **before** the Stage 3 main runs. Any change after the lock is labeled **post-hoc** and logged in `DRIFT_LOG.md`.
++**Pre-registration status:** NOT LOCKED. (Edits on 2026-10-21 under DR-002 were made before the lock and are not post-hoc.) Thresholds below are *proposed*. They are finalized in D-003 after Stage 1 (when the baseline numbers are known) and locked with git tag `prereg-v1` **before** the Stage 3 main runs. Any change after the lock is labeled **post-hoc** and logged in `DRIFT_LOG.md`.
+ 
+ **Null result (applies to all):** no difference, or a loss, once the backward network's compute is counted.
+ 
+@@ -10,14 +10,14 @@
+ 
+ - **Statement:** Adding the meeting loss reduces the steps and FLOPs needed to reach a target validation accuracy, compared with a tuned baseline at equal total compute.
+ - **Metrics:** FLOPs-to-target and steps-to-target (targets chosen so the baseline reaches them in every seed).
+-- **Proposed success threshold:** mean FLOPs-to-target at least 15% lower than the tuned baseline; paired 95% bootstrap confidence interval across seeds excludes zero; holds at at least 2 different target accuracies.
++- **Proposed success threshold:** mean FLOPs-to-target at least 15% lower than the tuned baseline; paired 95% bootstrap confidence interval across seeds excludes zero; holds at at least 2 different target accuracies. The gain must also exceed the re-tuning noise floor of arm A (D-014). Note: arm D costs about 23% more FLOPs per step (F-003), so it needs about a 19% step reduction just to break even.
+ - **Status:** open
+ - **Linked findings:** none yet
+ - **Paper sections:** Introduction, 5.1
+ 
+ ## H2 (specificity): the backward-derived target is what matters
+ 
+-- **Statement:** The gain is not matched by other auxiliary losses of similar cost at the same layer (deep supervision, arm B; autoencoder reconstruction, arm C).
++- **Statement:** The gain is not matched by other auxiliary losses at the same layer: DSN-style deep supervision (arm B, primary implementation B-paper; B-code reported as a secondary implementation) and autoencoder reconstruction (arm C). Costs are compared at equal FLOPs, not equal cost per step.
+ - **Metrics:** same as H1, arms A to D.
+ - **Proposed success threshold:** arm D beats both arm B and arm C under the same criterion as H1.
+ - **Status:** open
+@@ -28,7 +28,7 @@
+ 
+ - **Statement:** The gradient of the meeting loss on the lower layers is positively aligned with the true task gradient, and larger alignment goes with larger speedup.
+ - **Metrics:** cosine similarity between `g_task` and `g_meet` (see `docs/METHOD.md`); correlation of per-seed alignment with per-seed speedup.
+-- **Proposed success threshold:** median alignment positive at at least 90% of evaluation points after warm-up.
++- **Proposed success threshold:** median alignment positive at at least 90% of evaluation points after warm-up. Expectation from the literature: alignment is likely positive but well below 1 (Lee et al. 2015, Theorem 1 gives only a lower bound under perfect inverses; Meulemans et al. 2020 argue DTP follows Gauss-Newton-like targets).
+ - **Status:** open
+ - **Linked findings:** none yet
+ - **Paper sections:** 6
+@@ -42,6 +42,16 @@
+ - **Linked findings:** none yet
+ - **Paper sections:** 5.3, 5.4
+ 
++## H5 (confound control): the gain is not just a lower-layer learning-rate effect
++
++- **Statement:** Arm D's gain over arm A is not reproduced by control E (arm A with a tuned lower-layer learning-rate multiplier `low_lr_mult`, tuned with the same trial budget). Control F (exact-gradient target) is reported as a reference.
++- **Metrics:** same as H1.
++- **Proposed success threshold:** arm D beats arm E under the H1 criterion.
++- **Status:** open
++- **Linked findings:** none yet
++- **Paper sections:** 5.2, 6
++- **Note:** under AdamW, control F rescales the lower-layer gradient, which Adam largely normalizes away, so F is most informative under SGD with momentum (see D-013).
++
+ ---
+ 
+ ## Hypothesis template (for new entries)
+diff --git a/docs/LITERATURE.md b/docs/LITERATURE.md
+index a4cfd12..ece6321 100644
+--- a/docs/LITERATURE.md
++++ b/docs/LITERATURE.md
+@@ -1,62 +1,45 @@
+ # Literature Notes
+ 
+-For each paper: what it does, how it overlaps with our idea, what we do differently. Titles, years, and venues were written from memory and **must be verified** when you read each paper (fix them here if wrong). "Read" status values: `not read`, `skimmed`, `read in full`.
++For each paper: what it does, how it overlaps with our idea, what we do differently. Details marked "(verify)" came from memory or search snippets and must be checked against the paper. "Read" values: `not read`, `skimmed`, `read in full`.
+ 
+-The five papers marked **SPRINT** should be read (three passes each) before the pre-registration lock. If any of them already does our auxiliary meeting loss in essentially the same form, that is a drift trigger (`GUIDE.md`, Section 4).
++Reading sprint: the five SPRINT papers were read in full on 2026-10-21 (notes below). Newer related work was found by a quick web search the same day (rows marked "found by search, not read"). Last literature search for new overlapping work: 2026-10-21 (quick search only; repeat before the `prereg-v1` lock and again before submission).
+ 
+-Last literature search for new overlapping work: not yet done.
++## Novelty statement (draft v1, 2026-10-21, see D-012)
+ 
+-## Target propagation and backward signals
++The loss itself is the SDTP/DTP target: with `G` approximating an inverse, the target for a middle state is `h + G(label) - G(prediction)` (Lee et al. 2015, Eq. 15; Bartunov et al. 2018, SDTP). We do **not** claim a new loss. Our contribution is a compute-matched empirical study of using that target as an *auxiliary* signal next to ordinary backpropagation: FLOPs-to-target against tuned baselines (with learning-rate schedules and a re-tuning noise floor, per Schmidt et al. 2021), controls for a lower-layer learning-rate effect and for DSN-style deep supervision and autoencoder auxiliaries, and a mechanism diagnosis through gradient alignment. Prior work evaluated TP-style targets as *replacements* for backpropagation and judged final accuracy, without counting compute.
+ 
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| **SPRINT** | Lee, Zhang, Fischer, Bengio, "Difference Target Propagation" (2015) | not read | | Closest relative: backward network `G`, target built from a difference | |
+-| | Bengio, "How auto-encoders could provide credit assignment in deep networks via target propagation" (2014) | not read | | | |
+-| | Meulemans et al., "A Theoretical Framework for Target Propagation" (2020) | not read | | | |
+-| **SPRINT** | Bartunov et al., "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures" (2018) | not read | | Evidence on how this family scales | |
+-| | Lillicrap et al., "Random synaptic feedback weights support error backpropagation for deep learning" (2016) | not read | | | |
++## Read in full (reading sprint)
+ 
+-## Auxiliary and bidirectional objectives
++| Citation | arXiv / venue (verify) | What it does | Overlap with ours | What we do differently |
++|---|---|---|---|---|
++| Lee, Zhang, Fischer, Bengio, "Difference Target Propagation" | arXiv:1412.7525; ECML PKDD 2015 | Replaces gradients with layer-wise targets. Each layer has a learned inverse `g_i` trained with a noise-injected reconstruction loss. DTP target: `h_{i-1} + g_i(target_i) - g_i(h_i)`. The top hidden layer's target uses the true gradient. Theorem 1: with perfect inverses and a small step, the TP update is within 90 degrees of the BP update (a lower bound on cos of the angle). Theorem 2: the difference correction makes the next layer's output move toward its target under a Jacobian condition. Results: MNIST 7x240 tanh 1.94% vs BP 1.86% error; with ReLU 3.15% vs 1.62%; CIFAR-10 fully connected 50.71% vs 53.72% accuracy. | Our target is this formula at one middle layer. Its theory motivates our gradient-alignment diagnostic (H3). Its warnings: ReLU hurts TP; the inverse is hard to learn when the output layer is much smaller than the layer below. | We keep backprop and use the target as an auxiliary loss; `G` inverts the whole top half; we measure compute to a target. |
++| Bartunov, Santoro, Richards, Hinton, Lillicrap, "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures" | arXiv:1807.04587; NeurIPS 2018 | Tests DTP, a gradient-free simplified DTP (SDTP), SDTP with auxiliary outputs (AO-SDTP), feedback alignment and direct feedback alignment on MNIST, CIFAR-10 and ImageNet. SDTP target for the penultimate layer: `h - g(h_out) + g(correct label)`. Results (fully connected, test error): MNIST BP 1.48%, DTP-alternating 1.83%, SDTP-alternating 2.28%; CIFAR BP 41.32%, DTP 42.32%, SDTP 54.27%, AO-SDTP 45.40%. ImageNet top-1 error: BP 71.79%, DTP 98.34%, SDTP 99.28%. Appendix 5.6: backprop is a special case of TP with the Jacobian transpose as the "inverse"; proposes hybrid targets (convex mix of the two) as unexplored. | **The SDTP target is identical to ours.** The low-entropy label target is the weakness they diagnose (our risk R-09). Alternating training of forward and inverse was more stable than parallel. | Used next to BP, not as a replacement; compute-matched evaluation; controls; we adopt their AO idea as variant V2. |
++| Lee, Xie, Gallagher, Zhang, Tu, "Deeply-Supervised Nets" | arXiv:1409.5185; AISTATS 2015 | Companion classifier objectives on hidden layers, trained together with the output loss by backprop; hinge threshold and a decaying weight make them fade out. Claims faster convergence (loose theory), better generalization, larger gains with small data (26% at 500 samples), 4.55 times larger first-layer gradient variance. See `docs/notes/dsn-reference-notes.md`. | Arm B baseline: hidden-layer auxiliary losses with backprop. | Our auxiliary target comes from a learned inverse, not directly from the label; compute is counted; tuned baselines. |
++| Rasmus, Valpola, Honkala, Berglund, Raiko, "Semi-Supervised Learning with Ladder Networks" | arXiv:1507.02672; NeurIPS 2015 | Denoising targets at every layer with lateral skip connections, trained jointly with the supervised loss by backprop. Normalization is needed to avoid the trivial constant solution. Permutation-invariant MNIST: 100 labels 1.06% vs 21.74% baseline; all labels 0.57% vs 0.80%. A plain decoder-autoencoder auxiliary gave no significant gain over the supervised model. Training compute roughly triples. | Local auxiliary targets plus backprop; the collapse warning (our risk R-03); plain autoencoder auxiliaries may not help (arm C). | Labels, not unsupervised denoising, drive our target; compute-matched comparison. Their gains were largest in the low-label regime, which suggests adding a low-label experiment. |
++| Schmidt, Schneider, Hennig, "Descending through a Crowded Valley: Benchmarking Deep Learning Optimizers" | arXiv:2007.01547; ICML 2021 | Benchmarks 15 optimizers on 8 DeepOBS problems (TensorFlow 1.15) with budgets of 1, 25, 50 and 75 random-search runs, four schedules, and 10 seeds for the best setting. No clear winner; tuning helps about as much as trying other optimizers; schedules add about 5% median; re-tuning the same optimizer shifts results about as much as switching optimizers. | Not an overlap: our evaluation methodology. | We adopt: 25-trial budgets, schedules, 10 final seeds, re-tuning noise floor (D-014). We do not claim comparison with their published numbers unless we run the same DeepOBS tasks and protocol. |
+ 
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| **SPRINT** | Lee et al., "Deeply-Supervised Nets" (2015) | not read | | Our arm B baseline | |
+-| **SPRINT** | Rasmus et al., "Semi-Supervised Learning with Ladder Networks" (2015) | not read | | Bottom-up and top-down paths with matching | |
+-| | Zhu et al., "Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks" (2017) | not read | | | |
+-| | Hinton, Dayan, Frey, Neal, "The wake-sleep algorithm for unsupervised neural networks" (1995) | not read | | | |
++## Found by search, not read (2026-10-21; read at least the first three before the lock)
+ 
+-## Collapse prevention
++| Citation (verify) | What it appears to be | Why it matters |
++|---|---|---|
++| Meulemans, Carzaniga, Suykens, Sacramento, Grewe, "A Theoretical Framework for Target Propagation", NeurIPS 2020 (arXiv:2006.14331) | Theory of TP; shows a fundamental limitation of DTP and relates its targets to Gauss-Newton targets | Our H3: alignment with the true gradient may be limited by design; also motivates a variant of the inverse loss |
++| Work reporting a "local difference reconstruction loss" that makes DTP targets align with backprop rather than Gauss-Newton targets (2022; see arXiv:2411.02001 for citing context) | Fix for the alignment limitation | Candidate upgrade of our inverse loss; check the exact reference |
++| "Fixed-Weight Difference Target Propagation" (arXiv:2212.10352) | Keeps feedback weights fixed and drops layer-wise autoencoding losses; reported to beat DTP on four classification datasets | Supports variant V3 (frozen random `G`) |
++| Bengio, "Deriving Differential Target Propagation from Iterating Approximate Inverses" (arXiv:2007.15139) | Theory linking DTP to iterating approximate inverses | Background for the target formula |
++| "Local Loss Optimization in the Infinite Width: Stable Parameterization of Predictive Coding Networks and Target Propagation" (arXiv:2411.02001) | Scaling and parameterization of TP-style methods | Possible guidance on stable settings |
++| "Training Deep Architectures Without End-to-End Backpropagation: A Survey on the Provably Optimal Methods" (arXiv:2101.03419) | Survey of methods that avoid end-to-end backprop | Related-work map |
++| Ororbia and Mali, "Biologically Motivated Algorithms for Propagating Local Target Representations" (arXiv:1805.11703) | Local target propagation algorithms | Related work |
++| Schneider, Balles, Hennig, "DeepOBS: A Deep Learning Optimizer Benchmark Suite" (ICLR 2019) | The benchmark suite behind Crowded Valley | Needed only if we compare against their published numbers |
+ 
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| | Grill et al., BYOL (2020) | not read | | | |
+-| | Chen and He, SimSiam (2021) | not read | | | |
+-| | Bardes et al., VICReg (2022) | not read | | | |
++## Other background (not read; read only if needed)
+ 
+-## Reversible computation (a different use of "backward")
++- Bengio, "How auto-encoders could provide credit assignment in deep networks via target propagation" (arXiv:1407.7906, 2014): the original TP report.
++- Lillicrap et al., "Random synaptic feedback weights support error backpropagation for deep learning" (Nature Communications 2016) and Nokland, "Direct Feedback Alignment" (2016): relevant to V3, because for a near-linear frozen `G` the target `G(e_y) - G(p)` acts like a random linear feedback of the output error.
++- Collapse prevention: BYOL (2020), SimSiam (2021), VICReg (2022).
++- Reversible networks: Gomez et al. 2017 (a different use of "backward").
++- LLM backward reasoning (inference-time): Weng et al. 2022, Berglund et al. 2023, Chen et al. 2024.
++- Backup-plan papers (optimizer ideas): see `docs/reference/02-brain-vs-model-comparison.md` Section 11 and `docs/reference/01-proposal-and-starting-guide.md` Section 10.
+ 
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| | Gomez et al., "The Reversible Residual Network: Backpropagation Without Storing Activations" (2017) | not read | | | |
++## Reference code
+ 
+-## LLM backward reasoning (inference-time relatives)
+-
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| | Weng et al., "Large Language Models are Better Reasoners with Self-Verification" (2022) | not read | | | |
+-| | Berglund et al., "The Reversal Curse" (2023) | not read | | | |
+-| | Chen et al., "Reverse Thinking Makes LLMs Stronger Reasoners" (2024) | not read | | | |
+-
+-## Evaluation rigor
+-
+-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
+-|---|---|---|---|---|---|
+-| **SPRINT** | Schmidt, Schneider, Hennig, "Descending through a Crowded Valley: Benchmarking Deep Learning Optimizers" (2021) | not read | | How to evaluate fairly | |
+-
+-## Backup-plan papers (optimizer ideas; read only if we pivot)
+-
+-See `docs/reference/02-brain-vs-model-comparison.md`, Section 11, and `docs/reference/01-proposal-and-starting-guide.md`, Section 10 (Adam, AdamW, Lion, Shampoo, Muon, LARS/LAMB).
+-
+-## Novelty statement (update after the reading sprint)
+-
+-Not yet written. Draft it here after the sprint, record it as a decision, and make sure `paper/PAPER_DRAFT.md` (Related Work and Introduction) matches it.
++- Deeply-Supervised Nets, `github.com/s9xie/DSN` (Caffe fork): specification only, not run or copied (D-016). License allows educational, research and non-profit use; commercial use needs the university's permission. Notes: `docs/notes/dsn-reference-notes.md`.
+diff --git a/docs/METHOD.md b/docs/METHOD.md
+index e93bc65..eefb3b5 100644
+--- a/docs/METHOD.md
++++ b/docs/METHOD.md
+@@ -2,11 +2,12 @@
+ 
+ **This file is the single source of truth for the method.** It started as a copy of `docs/GUIDE.md`, Section 2, on 2026-10-21. From now on, change the method **here** (and record a decision), not in the guide. The code in `src/` must match this file; if they disagree, that is a drift event (`docs/DRIFT_LOG.md`).
+ 
+-**Method version:** 1.0 (2026-10-21). Add a line to the version history below on every change.
++**Method version:** 1.1 (2026-10-21). Add a line to the version history below on every change.
+ 
+ | Version | Date | Change | Decision / drift ID |
+ |---|---|---|---|
+ | 1.0 | 2026-10-21 | Initial specification (Design B) | D-002 |
++| 1.1 | 2026-10-21 | Arms and variants added (E, F, V1 to V3, B-paper/B-code), activation as hyperparameter, schedules; contribution reframed (the target is SDTP/DTP) | D-012, D-013, D-014, DR-002 |
+ 
+ ---
+ 
+@@ -74,3 +75,41 @@ At regular points during training, compute on the same batch:
+ - `g_meet`: gradient of `L_meet` with respect to the same parameters
+ 
+ and log `cos(g_task, g_meet)`. A consistently positive value means the meeting signal agrees with the true gradient and can explain a speedup. Near zero or negative values explain a failure.
++
++---
++
++## v1.1 additions (2026-10-21; D-012 to D-014, DR-002)
++
++The equations above remain the default arm D. Everything below is implemented in `src/model.py` and `src/train.py`, with config keys listed in `configs/template_all_options.yaml`.
++
++### Note on novelty
++
++The target `b = sg(h) + G(e_y) - G(sg(p))` is the simplified difference target propagation (SDTP) target of Bartunov et al. 2018 (and the DTP target of Lee et al. 2015, Eq. 15) applied at a middle layer, with `G` inverting the whole top half. What differs here is the use: an auxiliary loss next to backpropagation, measured for compute efficiency. See `docs/LITERATURE.md`.
++
++### Arms (Stage 3 main comparison, D-013)
++
++| Arm | `arm` key | Definition |
++|---|---|---|
++| A | `base` | Plain network |
++| B | `deepsup` | Companion cross-entropy head on `h`. **B-paper** (primary): weight `lam_aux` decays linearly to zero over `max_steps` (`aux_sched: linear`), optional threshold `aux_gamma` (loss term `relu(L_aux - gamma)`). **B-code** (secondary): constant weight with `aux_lr_decay: power_inv`, the companion head's learning rate decaying as `(1 + 1e-4*step)^-0.75` |
++| C | `ae` | Decoder reconstructs the input from `h`, weight `lam_aux` |
++| D | `meet` | Meeting loss, default configuration (equations above) |
++| E | `base` + `low_lr_mult` | Control: arm A with a learning-rate multiplier on the lower layers `F_low` |
++| F | `meet_grad` | Control: DTP-style exact-gradient target `b = sg(h - eta_hat * dL_task/dh)` in per-sample units (the batch size is multiplied back in), `L_meet = ||h - b||^2`, weight `lam_meet`, same warm-up |
++
++### Variants of D (maximum 3 per stage)
++
++- **V1, noise in the inverse loss** (`sigma_inv > 0`): the inverse is trained on corrupted middle states, as in DTP and SDTP. `h_t = sg(h) + sigma * eps`, `p_t = softmax(F_up(h_t))` (no gradient to `F_up`), `L_inv = ||G(p_t) - h_t||^2`. The target `b` is still computed from the clean `h` and `p`.
++- **V2, augmented output** (`arm: meet_ao`): `G` receives `[p, z]` where `z = tanh(sg(h) @ R)` and `R` is a fixed random matrix (a buffer, never trained), so that `b = sg(h) + G([e_y, z]) - G([p, z])`. Bartunov et al. introduced this to give the inverse richer, per-example information than the label alone (risk R-09). `d_aux` defaults to 128.
++- **V3, frozen random `G`** (`arm: meet_frozen`): `G` is never trained and there is no inverse loss (`lam_inv` ignored). For a near-linear `G`, `G(e_y) - G(p)` is approximately a fixed random linear map of the output error `(e_y - p)`, so this variant behaves like direct feedback alignment. It is also the cheapest meeting-loss variant (F-003). Inspired by fixed-weight DTP.
++
++### Hyperparameters shared by all arms (D-013, D-014)
++
++- `act` in {relu, tanh}. Lee et al. found ReLU hurt TP while backprop prefers it, so it is tuned per arm.
++- `lr_schedule` in {constant, cosine}.
++
++### Notes and expectations
++
++- **Adam and control F.** Under AdamW, adding a term whose gradient on the lower layers is parallel to the task gradient mostly rescales that gradient, which Adam normalizes away. So F is nearly a no-op under AdamW and informative under SGD with momentum; control E (learning-rate multiplier) is the one that changes Adam's effective step.
++- **Alignment (H3).** Expect positive but imperfect alignment: Lee et al. bound the angle only under perfect inverses and small steps, and Meulemans et al. 2020 argue DTP targets follow Gauss-Newton-like directions rather than the gradient.
++- **Parked idea.** Bartunov et al. (appendix 5.6) suggest hybrid targets that mix the Jacobian-transpose target with a learned-inverse target. With backprop kept, an exact-gradient component only rescales the gradient (see arm F), so a hybrid is parked until there is a reason to test it.
+diff --git a/docs/PLAN.md b/docs/PLAN.md
+index 5d42c9f..b3c1e6a 100644
+--- a/docs/PLAN.md
++++ b/docs/PLAN.md
+@@ -1,26 +1,26 @@
+ # Plan
+ 
+-**Last updated:** 2026-10-21
++**Last updated:** 2026-10-21 (v1.1 patch: reading sprint folded in, DR-002)
+ **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
+-**Current stage:** Stage 0 (project setup)
++**Current stage:** Stage 1 (baseline tuning) with Stage 2 code ready (method v1.1)
+ 
+ ## Current focus
+ 
+-Finish Stage 0 and start the reading sprint and Stage 1 in parallel.
++Tune arm A under the D-014 protocol, measure the re-tuning noise floor, and finalize the D-003 targets, while running short exploratory diagnostic runs of the meeting-loss arms.
+ 
+ ## Next three actions
+ 
+-1. Review and commit this repo skeleton; create the remote repository and push (record the choice of host and visibility in DECISIONS).
+-2. Start the reading sprint (five papers, below) and fill in `docs/LITERATURE.md` as you read.
+-3. Start Stage 1: set up the environment and build the plain MNIST baseline (arm A).
++1. Apply the v1.1 patch (`git am`), run `pytest` (17 tests expected to pass), and push.
++2. Write `scripts/run_sweep.py` (25 random trials per arm, ranges in D-014) and tune arm A; then tune A a second time with independent seeds (re-tuning noise floor); then finalize and record D-003 (targets 0.97 and 0.975; 0.98 secondary) and decide whether to enlarge the validation split (F-002).
++3. Run short exploratory diagnostics (not results; log them as Type `exploratory`): arm D with `act` relu vs tanh, `h_var` and alignment over training, and the frozen-G and AO variants, to catch collapse or dead signals before the lock.
+ 
+ ## Stage table
+ 
+ | Stage | Name | Target weeks | Status | Exit criteria (short) |
+ |---|---|---|---|---|
+-| 0 | Project setup and documents | 1 | **In progress** | All living docs exist; D-001 to D-011 recorded; repo pushed |
+-| 1 | Baseline reproduction | 1 | Not started | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
+-| 2 | Implement the meeting loss and test it | 1 to 2 | Not started | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
++| 0 | Project setup and documents | 1 | **Done** (2026-10-21) | All living docs exist; decisions recorded; repo pushed |
++| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 done; tuning pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
++| 2 | Implement the meeting loss and test it | 1 to 2 | **Code ready** (method v1.1, 17 tests pass); diagnostic runs pending | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
+ | 3 | Main comparison (arms A to D) | 2 to 3 | Not started | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
+ | 4 | Diagnostics and ablations | 3 to 4 | Not started | Components that matter identified; H3 evaluated |
+ | 5 | Generalization (CIFAR-10, modular arithmetic) | 4 to 6 | Not started | H4 evaluated on at least one setting beyond MNIST |
+@@ -29,23 +29,13 @@ Finish Stage 0 and start the reading sprint and Stage 1 in parallel.
+ 
+ Full task lists and gates for each stage are in `docs/GUIDE.md`, Section 6.
+ 
+-## Reading sprint (2 to 3 days, in parallel with Stages 0 and 1; finish before the pre-registration lock)
++## Reading sprint: DONE (2026-10-21)
+ 
+-Read each in three passes (abstract and figures, then method, then experiments and limitations). After each, fill in its row in `docs/LITERATURE.md`.
+-
+-| # | Paper | Why it matters |
+-|---|---|---|
+-| 1 | Lee et al. 2015, *Difference Target Propagation* | Closest relative of the design |
+-| 2 | Bartunov et al. 2018, on scalability of biologically motivated algorithms | Shows this method family struggling at scale |
+-| 3 | Rasmus et al. 2015, *Ladder Networks* | Combines bottom-up and top-down paths with matching |
+-| 4 | Lee et al. 2015, *Deeply-Supervised Nets* | The arm B baseline |
+-| 5 | Schmidt et al. 2021, *Descending through a Crowded Valley* | Evaluation rigor |
+-
+-If any paper already does the auxiliary meeting loss in essentially the same form, that is a drift trigger: record it, and adjust the hypothesis before running the main experiments.
++All five papers were read in full; notes are in `docs/LITERATURE.md` and `docs/notes/dsn-reference-notes.md`. Outcome: the loss is the SDTP/DTP target, so the contribution was reframed (D-012), and arms, tuning protocol and method were updated (D-013, D-014; DR-002). Still to do before the `prereg-v1` lock: skim the first three "found by search" papers in `docs/LITERATURE.md` (Meulemans et al. 2020, the difference-reconstruction-loss work, fixed-weight DTP) and repeat a literature search.
+ 
+ ## Limits to prevent forking paths
+ 
+-- Maximum pre-listed variants per stage: **3** (log every variant tried, including failures).
++- Maximum pre-listed variants of the meeting loss per stage: **3** (V1 noise in the inverse loss, V2 augmented output, V3 frozen random G; D-013). B-code is a baseline-implementation variant and does not count. Log every variant tried, including failures.
+ - The pre-registration lock (git tag `prereg-v1`) happens **before** the Stage 3 main runs.
+ 
+ ## What would make us stop or pivot
+@@ -66,3 +56,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
+ | Date | Note |
+ |---|---|
+ | 2026-10-21 | Repo created. Three guides added under `docs/`. D-001 to D-011 and DR-001 recorded. |
++| 2026-10-21 | Stage 1 untuned baseline logged (E-001, 5 seeds). v1.1 patch: D-012 to D-016, DR-002, F-001 to F-003, method v1.1 (arms E, F, variants V1 to V3), 17 tests. |
+diff --git a/docs/RISKS.md b/docs/RISKS.md
+index 4194b32..38744cd 100644
+--- a/docs/RISKS.md
++++ b/docs/RISKS.md
+@@ -4,13 +4,20 @@ Review weekly. Update status and detection notes as things change. Template colu
+ 
+ | ID | Risk | Detection | Mitigation | Status |
+ |---|---|---|---|---|
+-| R-01 | Prior work overlaps (difference target propagation, ladder networks, deep supervision) | Literature scan; reviewer-style novelty check | Pin the contribution to the auxiliary use next to backprop and to specific variants (surprise-weighted, multi-depth); state the overlap openly | open |
+-| R-02 | Extra compute from the backward network `G` cancels any speedup | FLOPs-to-target comparison | Smaller `G`; share layers; compare at equal FLOPs | open |
++| R-01 | Prior work overlaps (difference target propagation, ladder networks, deep supervision) | Literature scan; reviewer-style novelty check | **Materialized 2026-10-21:** the loss is the SDTP/DTP target. Mitigation executed: contribution reframed as a compute-matched study (D-012); overlap stated openly; repeat the literature search before the lock and before submission | open (reframed, D-012) |
++| R-02 | Extra compute from the backward network `G` cancels any speedup | FLOPs-to-target comparison | Smaller `G`; share layers; compare at equal FLOPs. Measured overhead (F-003): meet +22.9%, meet with noise +34.6%, meet_ao +44.6%, meet_frozen +11.7%. Arm D needs about a 19% step reduction to break even | open |
+ | R-03 | Collapse or noisy targets | Variance of `h`; alignment early in training | Warm-up, detach rules, smaller `lam_meet` | open |
+ | R-04 | Gains disappear against properly tuned baselines | Equal-budget tuning | Report honestly; reframe as a negative result | open |
+ | R-05 | Forking paths (too many variants) | Variant count in `PLAN.md` | Pre-listed variants only (max 3 per stage); report all | open |
+ | R-06 | Works only at small scale | Stage 6 scaling check | State the limit; do not generalize | open |
+ | R-07 | FLOP accounting error | Unit test on a known layer; cross-check with wall-clock | Fix and rerun | open |
+ | R-08 | Time overrun | Weekly review against `PLAN.md` | Cut Stage 5b or Stage 6 first; keep the core comparison rigorous | open |
+-| R-09 | Class labels carry too little information for useful per-example targets | Alignment near zero in Stage 3 | Move to tasks where the result determines intermediate steps (Stage 5b) | open |
+-| R-10 | Starter code in `src/` is untested and may contain bugs | Stage 2 unit tests | Run the tests first; fix before any result is trusted | open |
++| R-09 | Class labels carry too little information for useful per-example targets | Alignment near zero in Stage 3 | **Supported by Bartunov et al. 2018** (SDTP much worse than DTP on CIFAR; AO-SDTP recovers part). Mitigations: variant V2 (augmented output), V1 (noise), Stage 5b tasks where the result determines intermediate steps | open |
++| R-10 | Starter code in `src/` may contain bugs | Unit tests | Partly mitigated: 17 tests pass on PyTorch 2.14.1 CPU (checked 2026-10-21 while preparing v1.1), and arm A ran end to end (E-001). Arm D and the variants have only been smoke-tested on synthetic data, not on MNIST; run `pytest` first in every environment | open |
++| R-11 | Licensing: the DSN reference repository permits only educational, research and non-profit use; the paper notes a patent disclosure | Review before any commercial use | Arm B reimplemented from the paper, no code copied (D-016); check with the university before commercial use of DSN-style code or ideas | open |
++| R-12 | The gain is just an effective learning-rate increase on the lower layers | Control arm E (`low_lr_mult`) and reference arm F | Tune E with the same budget as D (D-013, H5); note Adam normalizes gradient scale, so use SGD with momentum to make F informative | open |
++| R-13 | ReLU is a poor fit for TP-style targets (Lee et al.: 3.15% vs 1.62% error) while backprop prefers it, so a fixed activation could bias the comparison | Compare arms under both activations | `act` in {relu, tanh} is a hyperparameter of every arm (D-013, D-014) | open |
++| R-14 | Exploratory findings are reported as confirmed claims | Claim without a confirmatory or verification evidence entry | D-015: Type field on every log entry; claims only from confirmatory or verification evidence | open |
++| R-15 | Comparison with Crowded Valley numbers is not apples to apples (different tasks, TensorFlow 1.15 DeepOBS) | Review of any comparison statement | Adopt their methodology; compare only to numbers we reproduce on the same tasks and protocol | open |
++| R-16 | The 5,000-sample validation set limits resolution (about 0.22 points of sampling error near 97.5%) | F-002 | Use targets 0.97 and 0.975; consider a larger validation split by a new decision | open |
++| R-17 | A weak baseline (constant learning rate, narrow search) inflates the apparent gain | Re-tuning noise floor; schedule as a hyperparameter | D-014: 25 trials, schedules, `act`, noise floor, 10 final seeds | open |
+diff --git a/docs/notes/dsn-reference-notes.md b/docs/notes/dsn-reference-notes.md
+new file mode 100644
+index 0000000..d2042f9
+--- /dev/null
++++ b/docs/notes/dsn-reference-notes.md
+@@ -0,0 +1,29 @@
++# Notes: Deeply-Supervised Nets (DSN) paper and reference code
++
++Read 2026-10-21. Sources: the paper (arXiv:1409.5185, Lee, Xie, Gallagher, Zhang, Tu) and the reference repository `github.com/s9xie/DSN` (a Caffe fork). Purpose: specify arm B (decisions D-013, D-016). The code is **not** run or copied; arm B is reimplemented in PyTorch.
++
++## What the paper says
++
++- Companion objective on hidden layers: overall objective plus, for each hidden layer m, `alpha_m * [ ||w_m||^2 + loss_m(W, w_m) - gamma ]_+` with classifier heads `w_m` (SVM or softmax). The hinge at `gamma` makes the companion term vanish once it is small enough.
++- Optional decay of the companion weight: `alpha_m * 0.1 * (1 - t/N)` with `t` the epoch and `N` the total number of epochs (reads as a linear decay to zero).
++- Claims: faster convergence (loose theory assuming local strong convexity; the authors call the assumption very loose), more intuitive early-layer features, 4.55 times larger gradient variance in the first conv layer, better generalization, and larger gains with little training data (26% gain at 500 samples).
++- Results: MNIST 0.39%, CIFAR-10 9.78% (8.22% with augmentation), CIFAR-100 34.57%, SVHN 1.92%. No compute accounting.
++
++## What the reference code does (CIFAR-10, `examples/best_cifar10_9.65`)
++
++- Network: Network-in-Network style with mlpconv blocks. Linear classifier heads ("ip_svm" layers) with **squared hinge loss** are attached after conv1, conv2 and conv3, plus the output loss.
++- Solver: base learning rate 0.025, momentum 0.9, weight decay 5e-4, 50,000 iterations, step schedule.
++- Companion heads use very small learning-rate multipliers (about 0.001 to 0.002 relative to the trunk).
++- **Paper and code differ.** The prototxt has no explicit companion loss weights and no hinge threshold. The only decay found is a **learning-rate decay on the companion heads' parameters** (policy "power_inv": `lr * (1 + 1e-4 * iter)^-0.75`, with `localgamma`/`localpower` solver settings). So the paper's "decaying loss weight with threshold" and the code's "decaying head learning rate" are two different implementations of "the companion objective fades out".
++- The repository README says softmax losses were used for CIFAR-100 and SVHN because hinge loss converged poorly with more than 10 classes.
++
++## How we use it (D-013)
++
++- **B-paper (primary):** cross-entropy companion head on the middle state, weight `lam_aux` decaying linearly to zero (`aux_sched: linear`), optional threshold (`aux_gamma`).
++- **B-code (secondary baseline-implementation variant):** constant weight, with the companion head's learning rate decaying as in the reference code (`aux_lr_decay: power_inv`).
++- Cross-entropy instead of squared hinge, because we use 10 classes with softmax everywhere else and the README reports hinge trouble beyond 10 classes.
++- Both variants are logged; B-code does not count against the three-variant limit for the meeting loss.
++
++## License and patent note (D-016, R-11)
++
++The repository license grants permission to copy, modify and distribute the software for **educational, research and non-profit purposes** without fee. Any other use requires contacting the university's technology transfer office. The paper's first page also notes a patent disclosure (UC San Diego docket). This is fine for a research baseline implemented from the paper. Before any commercial use of DSN-style code or ideas, check with the university. Do not copy code from the repository into this project.
+diff --git a/docs/templates/experiment-entry.md b/docs/templates/experiment-entry.md
+index c54b88b..13c0446 100644
+--- a/docs/templates/experiment-entry.md
++++ b/docs/templates/experiment-entry.md
+@@ -1,4 +1,5 @@
+ ## E-0XX: <title>
++- Type: confirmatory | exploratory | verification   (D-015)
+ - Date / Stage / Hypothesis tested (H-ID):
+ - Git commit / config file(s) / seeds:
+ - Reproduce with: <exact command>
+diff --git a/docs/templates/finding-entry.md b/docs/templates/finding-entry.md
+index 3741ed5..abd0fef 100644
+--- a/docs/templates/finding-entry.md
++++ b/docs/templates/finding-entry.md
+@@ -1,4 +1,5 @@
+ ## F-0XX: <the finding, as one sentence>
++- Type: confirmatory | exploratory | verification   (D-015)
+ - Status: tentative | supported | refuted | superseded by F-0YY
+ - Confidence: low | medium | high   (and why: seeds, effect size, replication)
+ - Evidence: E-..., figure path
+diff --git a/paper/CLAIMS.md b/paper/CLAIMS.md
+index 49a36bc..d40f4cc 100644
+--- a/paper/CLAIMS.md
++++ b/paper/CLAIMS.md
+@@ -4,8 +4,10 @@ Every claim the paper makes, mapped to evidence. A claim may only appear in `PAP
+ 
+ | ID | Claim (exact paper wording) | Type | Evidence (F-/E- IDs) | Status | Paper location | Last checked |
+ |---|---|---|---|---|---|---|
+-| C-01 | Adding the meeting loss reduces the FLOPs needed to reach a target validation accuracy compared with a tuned baseline at equal total compute. (wording provisional; final wording must match the locked H1 threshold) | empirical | none yet (H1) | planned | Sec. 5.1, Abstract | 2026-10-21 |
+-| C-02 | The gain is not matched by deep supervision or autoencoder-reconstruction auxiliary losses of similar cost. (provisional) | empirical | none yet (H2) | planned | Sec. 5.2 | 2026-10-21 |
+-| C-03 | The meeting loss's gradient on the lower layers is positively aligned with the true task gradient. (provisional) | empirical | none yet (H3) | planned | Sec. 6 | 2026-10-21 |
++| C-01 | Adding a target-propagation-style auxiliary loss next to backpropagation reduces the FLOPs needed to reach a target validation accuracy compared with a tuned baseline at equal total compute. (provisional; final wording must match the locked H1 threshold and the noise floor) | empirical | none yet (H1) | planned | Sec. 5.1, Abstract | 2026-10-21 |
++| C-02 | The gain is not matched by DSN-style deep supervision or an autoencoder-reconstruction auxiliary loss at the same layer. (provisional) | empirical | none yet (H2) | planned | Sec. 5.2 | 2026-10-21 |
++| C-03 | The auxiliary loss's gradient on the lower layers is positively aligned with the true task gradient. (provisional) | empirical | none yet (H3) | planned | Sec. 6 | 2026-10-21 |
+ | C-04 | The effect holds beyond MNIST and across optimizers. (provisional; may be weakened or dropped depending on Stage 5 and 6 results) | empirical | none yet (H4) | planned | Sec. 5.3, 5.4 | 2026-10-21 |
+-| C-05 | The method is a variant of target-propagation-style learning signals used as an auxiliary loss next to backpropagation. (background; final wording depends on the novelty statement after the reading sprint) | background | docs/LITERATURE.md | planned | Sec. 2 | 2026-10-21 |
++| C-05 | The auxiliary target is the simplified difference target propagation (SDTP) target applied at a middle layer; we make no claim of a new loss. (final wording depends on the novelty statement in docs/LITERATURE.md) | background | docs/LITERATURE.md; D-012 | planned | Sec. 1, 2 | 2026-10-21 |
++| C-06 | The gain is not explained by an effective learning-rate increase on the lower layers. (provisional) | empirical | none yet (H5) | planned | Sec. 5.2, 6 | 2026-10-21 |
++| C-07 | Per-step compute overhead of each arm relative to the baseline (meeting loss about +23% FLOPs, deep supervision about +0.6%, autoencoder auxiliary about +116% for this MLP). | empirical (deterministic count) | F-003 | supported | Sec. 3 (cost analysis) | 2026-10-21 |
+diff --git a/paper/PAPER_DRAFT.md b/paper/PAPER_DRAFT.md
+index b59e53a..ed31ebc 100644
+--- a/paper/PAPER_DRAFT.md
++++ b/paper/PAPER_DRAFT.md
+@@ -9,7 +9,7 @@ LIVING DRAFT RULES (docs/GUIDE.md, Section 7)
+ Terminology must match docs/METHOD.md. Related Work must match the novelty statement in docs/LITERATURE.md.
+ -->
+ 
+-# <Working title: e.g. "Meeting in the Middle: A Bidirectional Target Loss for Faster Training">
++# <Working title: e.g. "A Target-Propagation Auxiliary Loss Next to Backpropagation: A Compute-Matched Study">
+ 
+ Status: skeleton | Version: v0.1 | Last checked against FINDINGS: YYYY-MM-DD
+ 
+@@ -21,15 +21,15 @@ Problem (1 sentence) → idea (1) → key result with number [C-..] (1) → scop
+ Status: skeleton | Depends on: H1-H4, LITERATURE
+ - The cost of training and the credit-assignment path
+ - The idea in one paragraph
+-- Contributions (each one a claim ID): [C-01] ... [C-02] ...
++- Contributions (each one a claim ID): [C-01] compute-matched efficiency result; [C-02] specificity against DSN-style and autoencoder auxiliaries; [C-06] not a learning-rate artifact; [C-03] mechanism (gradient alignment). State plainly that the loss is the SDTP target [C-05]; the study is the contribution.
+ 
+ ## 2. Related work
+ Status: skeleton | Depends on: LITERATURE.md
+-- Target propagation and difference target propagation
+-- Auxiliary and deep-supervision losses
++- Target propagation, difference target propagation (Lee et al.), and simplified DTP (Bartunov et al.): our target is the SDTP target [C-05]; later theory (Meulemans et al.) and variants (fixed-weight DTP)
++- Auxiliary and deep-supervision losses: DSN (Lee et al.), including the paper-versus-code difference in how the companion objective fades
+ - Ladder networks, autoencoder and cycle-consistency objectives
+ - Predictive coding and local-learning rules
+-- Efficient optimizers
++- Evaluation methodology: Schmidt et al. (budgets, schedules, seeds, re-tuning noise)
+ - How this work differs (must match novelty notes in DECISIONS)
+ 
+ ## 3. Method
+-- 
+2.43.0
+

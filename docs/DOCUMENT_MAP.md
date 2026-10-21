@@ -55,6 +55,7 @@ In words:
 | What have we run, and with what result? | `docs/EXPERIMENT_LOG.md` |
 | What do we currently believe, and how sure are we? | `docs/FINDINGS.md` |
 | What does related work say, and how do we differ? | `docs/LITERATURE.md` |
+| What exactly did a specific paper or reference repo say (details, numbers, caveats)? | `docs/notes/` (for example `dsn-reference-notes.md`) and the rows in `docs/LITERATURE.md` |
 | What could go wrong? | `docs/RISKS.md` |
 | What changed from the original plan, and what did it touch? | `docs/DRIFT_LOG.md` |
 | What is the paper saying, and is every claim backed? | `paper/PAPER_DRAFT.md` and `paper/CLAIMS.md` |

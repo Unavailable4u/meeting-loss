@@ -1,62 +1,45 @@
 # Literature Notes
 
-For each paper: what it does, how it overlaps with our idea, what we do differently. Titles, years, and venues were written from memory and **must be verified** when you read each paper (fix them here if wrong). "Read" status values: `not read`, `skimmed`, `read in full`.
+For each paper: what it does, how it overlaps with our idea, what we do differently. Details marked "(verify)" came from memory or search snippets and must be checked against the paper. "Read" values: `not read`, `skimmed`, `read in full`.
 
-The five papers marked **SPRINT** should be read (three passes each) before the pre-registration lock. If any of them already does our auxiliary meeting loss in essentially the same form, that is a drift trigger (`GUIDE.md`, Section 4).
+Reading sprint: the five SPRINT papers were read in full on 2026-10-21 (notes below). Newer related work was found by a quick web search the same day (rows marked "found by search, not read"). Last literature search for new overlapping work: 2026-10-21 (quick search only; repeat before the `prereg-v1` lock and again before submission).
 
-Last literature search for new overlapping work: not yet done.
+## Novelty statement (draft v1, 2026-10-21, see D-012)
 
-## Target propagation and backward signals
+The loss itself is the SDTP/DTP target: with `G` approximating an inverse, the target for a middle state is `h + G(label) - G(prediction)` (Lee et al. 2015, Eq. 15; Bartunov et al. 2018, SDTP). We do **not** claim a new loss. Our contribution is a compute-matched empirical study of using that target as an *auxiliary* signal next to ordinary backpropagation: FLOPs-to-target against tuned baselines (with learning-rate schedules and a re-tuning noise floor, per Schmidt et al. 2021), controls for a lower-layer learning-rate effect and for DSN-style deep supervision and autoencoder auxiliaries, and a mechanism diagnosis through gradient alignment. Prior work evaluated TP-style targets as *replacements* for backpropagation and judged final accuracy, without counting compute.
 
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| **SPRINT** | Lee, Zhang, Fischer, Bengio, "Difference Target Propagation" (2015) | not read | | Closest relative: backward network `G`, target built from a difference | |
-| | Bengio, "How auto-encoders could provide credit assignment in deep networks via target propagation" (2014) | not read | | | |
-| | Meulemans et al., "A Theoretical Framework for Target Propagation" (2020) | not read | | | |
-| **SPRINT** | Bartunov et al., "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures" (2018) | not read | | Evidence on how this family scales | |
-| | Lillicrap et al., "Random synaptic feedback weights support error backpropagation for deep learning" (2016) | not read | | | |
+## Read in full (reading sprint)
 
-## Auxiliary and bidirectional objectives
+| Citation | arXiv / venue (verify) | What it does | Overlap with ours | What we do differently |
+|---|---|---|---|---|
+| Lee, Zhang, Fischer, Bengio, "Difference Target Propagation" | arXiv:1412.7525; ECML PKDD 2015 | Replaces gradients with layer-wise targets. Each layer has a learned inverse `g_i` trained with a noise-injected reconstruction loss. DTP target: `h_{i-1} + g_i(target_i) - g_i(h_i)`. The top hidden layer's target uses the true gradient. Theorem 1: with perfect inverses and a small step, the TP update is within 90 degrees of the BP update (a lower bound on cos of the angle). Theorem 2: the difference correction makes the next layer's output move toward its target under a Jacobian condition. Results: MNIST 7x240 tanh 1.94% vs BP 1.86% error; with ReLU 3.15% vs 1.62%; CIFAR-10 fully connected 50.71% vs 53.72% accuracy. | Our target is this formula at one middle layer. Its theory motivates our gradient-alignment diagnostic (H3). Its warnings: ReLU hurts TP; the inverse is hard to learn when the output layer is much smaller than the layer below. | We keep backprop and use the target as an auxiliary loss; `G` inverts the whole top half; we measure compute to a target. |
+| Bartunov, Santoro, Richards, Hinton, Lillicrap, "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures" | arXiv:1807.04587; NeurIPS 2018 | Tests DTP, a gradient-free simplified DTP (SDTP), SDTP with auxiliary outputs (AO-SDTP), feedback alignment and direct feedback alignment on MNIST, CIFAR-10 and ImageNet. SDTP target for the penultimate layer: `h - g(h_out) + g(correct label)`. Results (fully connected, test error): MNIST BP 1.48%, DTP-alternating 1.83%, SDTP-alternating 2.28%; CIFAR BP 41.32%, DTP 42.32%, SDTP 54.27%, AO-SDTP 45.40%. ImageNet top-1 error: BP 71.79%, DTP 98.34%, SDTP 99.28%. Appendix 5.6: backprop is a special case of TP with the Jacobian transpose as the "inverse"; proposes hybrid targets (convex mix of the two) as unexplored. | **The SDTP target is identical to ours.** The low-entropy label target is the weakness they diagnose (our risk R-09). Alternating training of forward and inverse was more stable than parallel. | Used next to BP, not as a replacement; compute-matched evaluation; controls; we adopt their AO idea as variant V2. |
+| Lee, Xie, Gallagher, Zhang, Tu, "Deeply-Supervised Nets" | arXiv:1409.5185; AISTATS 2015 | Companion classifier objectives on hidden layers, trained together with the output loss by backprop; hinge threshold and a decaying weight make them fade out. Claims faster convergence (loose theory), better generalization, larger gains with small data (26% at 500 samples), 4.55 times larger first-layer gradient variance. See `docs/notes/dsn-reference-notes.md`. | Arm B baseline: hidden-layer auxiliary losses with backprop. | Our auxiliary target comes from a learned inverse, not directly from the label; compute is counted; tuned baselines. |
+| Rasmus, Valpola, Honkala, Berglund, Raiko, "Semi-Supervised Learning with Ladder Networks" | arXiv:1507.02672; NeurIPS 2015 | Denoising targets at every layer with lateral skip connections, trained jointly with the supervised loss by backprop. Normalization is needed to avoid the trivial constant solution. Permutation-invariant MNIST: 100 labels 1.06% vs 21.74% baseline; all labels 0.57% vs 0.80%. A plain decoder-autoencoder auxiliary gave no significant gain over the supervised model. Training compute roughly triples. | Local auxiliary targets plus backprop; the collapse warning (our risk R-03); plain autoencoder auxiliaries may not help (arm C). | Labels, not unsupervised denoising, drive our target; compute-matched comparison. Their gains were largest in the low-label regime, which suggests adding a low-label experiment. |
+| Schmidt, Schneider, Hennig, "Descending through a Crowded Valley: Benchmarking Deep Learning Optimizers" | arXiv:2007.01547; ICML 2021 | Benchmarks 15 optimizers on 8 DeepOBS problems (TensorFlow 1.15) with budgets of 1, 25, 50 and 75 random-search runs, four schedules, and 10 seeds for the best setting. No clear winner; tuning helps about as much as trying other optimizers; schedules add about 5% median; re-tuning the same optimizer shifts results about as much as switching optimizers. | Not an overlap: our evaluation methodology. | We adopt: 25-trial budgets, schedules, 10 final seeds, re-tuning noise floor (D-014). We do not claim comparison with their published numbers unless we run the same DeepOBS tasks and protocol. |
 
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| **SPRINT** | Lee et al., "Deeply-Supervised Nets" (2015) | not read | | Our arm B baseline | |
-| **SPRINT** | Rasmus et al., "Semi-Supervised Learning with Ladder Networks" (2015) | not read | | Bottom-up and top-down paths with matching | |
-| | Zhu et al., "Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks" (2017) | not read | | | |
-| | Hinton, Dayan, Frey, Neal, "The wake-sleep algorithm for unsupervised neural networks" (1995) | not read | | | |
+## Found by search, not read (2026-10-21; read at least the first three before the lock)
 
-## Collapse prevention
+| Citation (verify) | What it appears to be | Why it matters |
+|---|---|---|
+| Meulemans, Carzaniga, Suykens, Sacramento, Grewe, "A Theoretical Framework for Target Propagation", NeurIPS 2020 (arXiv:2006.14331) | Theory of TP; shows a fundamental limitation of DTP and relates its targets to Gauss-Newton targets | Our H3: alignment with the true gradient may be limited by design; also motivates a variant of the inverse loss |
+| Work reporting a "local difference reconstruction loss" that makes DTP targets align with backprop rather than Gauss-Newton targets (2022; see arXiv:2411.02001 for citing context) | Fix for the alignment limitation | Candidate upgrade of our inverse loss; check the exact reference |
+| "Fixed-Weight Difference Target Propagation" (arXiv:2212.10352) | Keeps feedback weights fixed and drops layer-wise autoencoding losses; reported to beat DTP on four classification datasets | Supports variant V3 (frozen random `G`) |
+| Bengio, "Deriving Differential Target Propagation from Iterating Approximate Inverses" (arXiv:2007.15139) | Theory linking DTP to iterating approximate inverses | Background for the target formula |
+| "Local Loss Optimization in the Infinite Width: Stable Parameterization of Predictive Coding Networks and Target Propagation" (arXiv:2411.02001) | Scaling and parameterization of TP-style methods | Possible guidance on stable settings |
+| "Training Deep Architectures Without End-to-End Backpropagation: A Survey on the Provably Optimal Methods" (arXiv:2101.03419) | Survey of methods that avoid end-to-end backprop | Related-work map |
+| Ororbia and Mali, "Biologically Motivated Algorithms for Propagating Local Target Representations" (arXiv:1805.11703) | Local target propagation algorithms | Related work |
+| Schneider, Balles, Hennig, "DeepOBS: A Deep Learning Optimizer Benchmark Suite" (ICLR 2019) | The benchmark suite behind Crowded Valley | Needed only if we compare against their published numbers |
 
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| | Grill et al., BYOL (2020) | not read | | | |
-| | Chen and He, SimSiam (2021) | not read | | | |
-| | Bardes et al., VICReg (2022) | not read | | | |
+## Other background (not read; read only if needed)
 
-## Reversible computation (a different use of "backward")
+- Bengio, "How auto-encoders could provide credit assignment in deep networks via target propagation" (arXiv:1407.7906, 2014): the original TP report.
+- Lillicrap et al., "Random synaptic feedback weights support error backpropagation for deep learning" (Nature Communications 2016) and Nokland, "Direct Feedback Alignment" (2016): relevant to V3, because for a near-linear frozen `G` the target `G(e_y) - G(p)` acts like a random linear feedback of the output error.
+- Collapse prevention: BYOL (2020), SimSiam (2021), VICReg (2022).
+- Reversible networks: Gomez et al. 2017 (a different use of "backward").
+- LLM backward reasoning (inference-time): Weng et al. 2022, Berglund et al. 2023, Chen et al. 2024.
+- Backup-plan papers (optimizer ideas): see `docs/reference/02-brain-vs-model-comparison.md` Section 11 and `docs/reference/01-proposal-and-starting-guide.md` Section 10.
 
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| | Gomez et al., "The Reversible Residual Network: Backpropagation Without Storing Activations" (2017) | not read | | | |
+## Reference code
 
-## LLM backward reasoning (inference-time relatives)
-
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| | Weng et al., "Large Language Models are Better Reasoners with Self-Verification" (2022) | not read | | | |
-| | Berglund et al., "The Reversal Curse" (2023) | not read | | | |
-| | Chen et al., "Reverse Thinking Makes LLMs Stronger Reasoners" (2024) | not read | | | |
-
-## Evaluation rigor
-
-| Priority | Citation (verify) | Read | What it does | Overlap with ours | What we do differently |
-|---|---|---|---|---|---|
-| **SPRINT** | Schmidt, Schneider, Hennig, "Descending through a Crowded Valley: Benchmarking Deep Learning Optimizers" (2021) | not read | | How to evaluate fairly | |
-
-## Backup-plan papers (optimizer ideas; read only if we pivot)
-
-See `docs/reference/02-brain-vs-model-comparison.md`, Section 11, and `docs/reference/01-proposal-and-starting-guide.md`, Section 10 (Adam, AdamW, Lion, Shampoo, Muon, LARS/LAMB).
-
-## Novelty statement (update after the reading sprint)
-
-Not yet written. Draft it here after the sprint, record it as a decision, and make sure `paper/PAPER_DRAFT.md` (Related Work and Introduction) matches it.
+- Deeply-Supervised Nets, `github.com/s9xie/DSN` (Caffe fork): specification only, not run or copied (D-016). License allows educational, research and non-profit use; commercial use needs the university's permission. Notes: `docs/notes/dsn-reference-notes.md`.

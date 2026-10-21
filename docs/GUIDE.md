@@ -316,6 +316,16 @@ Before the Stage 3 main runs: commit `HYPOTHESES.md`, `METHOD.md`, and decisions
 
 Trying many variants until one works produces false positives. Rules: set a maximum number of variants per stage in `PLAN.md`; log every variant tried, including failures; report all of them in the paper's appendix.
 
+### Exploratory versus confirmatory findings (added v1.2, D-015)
+
+Every entry in `EXPERIMENT_LOG.md` and `FINDINGS.md` carries a **Type**:
+
+- `confirmatory`: tests a hypothesis pre-registered under the `prereg-v1` tag, with fresh seeds.
+- `exploratory`: anything else, including surprises found while exploring variants or settings. Record it; it may be real.
+- `verification`: a deterministic check that tests no hypothesis (a FLOP count, a unit test).
+
+Paper claims (`paper/CLAIMS.md`) may only rest on `confirmatory` or `verification` evidence. An exploratory discovery becomes a claim only after a confirmatory run with fresh seeds, planned and logged **before** that run. The templates in `docs/templates/` include the Type field and take precedence over the template copies in Section 3.
+
 ---
 
 ## 5. Environment and engineering standards
@@ -337,7 +347,7 @@ Trying many variants until one works produces false positives. Rules: set a maxi
 
 ### Fair-comparison rules
 
-- **Equal tuning budget.** Every arm gets the same number of tuning trials. Suggested: 20 random trials per arm, drawing learning rate log-uniformly in [1e-4, 1e-2], weight decay in [1e-6, 1e-2], plus each arm's own loss weights (arms B, C, D). Use 2 seeds per trial for selection, then fresh seeds for final results.
+- **Equal tuning budget.** Every arm gets the same number of tuning trials. Current protocol (v1.2, D-014, supersedes the earlier 20-trial suggestion): 25 random trials per arm, drawing learning rate log-uniformly in [1e-4, 1e-2], weight decay in [1e-6, 1e-2], activation in {relu, tanh}, learning-rate schedule in {constant, cosine}, plus each arm's own loss weights (see D-014 for ranges). Use 2 seeds per trial for selection, then 10 fresh seeds for final results. Also run the **re-tuning noise floor**: tune arm A a second time with fully independent seeds, and require any gain to exceed the shift between the two tunings.
 - **Equal compute.** Compare at equal FLOPs, counting the backward network and any auxiliary heads. Report wall-clock time separately.
 - **Selection on validation only.**
 - **Seeds.** At least 5 for early comparisons, and at least 10 for headline results (MNIST is cheap enough).
@@ -415,7 +425,9 @@ Timelines are rough and assume part-time work. Adjust them, and write the real d
 | A | Baseline: plain network, AdamW |
 | B | Deep supervision: auxiliary classifier head on the middle state, weight `λ_aux` |
 | C | Autoencoder auxiliary: decoder reconstructs `x` from the middle state, weight `λ_aux` |
-| D | Meeting loss (Section 2) |
+| D | Meeting loss (Section 2; see `docs/METHOD.md` v1.1 for variants) |
+| E | Control: arm A plus a lower-layer learning-rate multiplier (`low_lr_mult`), D-013 |
+| F | Control: exact-gradient target (`meet_grad`), D-013 |
 
 **Tasks**
 
@@ -945,3 +957,4 @@ Titles, years, and venues below are from memory and may contain small errors. Ve
 |---|---|---|---|
 | 1.0 | 2026-10-21 | Initial guide | none |
 | 1.1 | 2026-10-21 | Repo created. Layout gains `CLAUDE.md`, `docs/DOCUMENT_MAP.md`, `docs/reference/`. Starter code placed in `src/` and `tests/`. Method now maintained in `docs/METHOD.md` (Section 2 is the v1.0 snapshot). | D-009, D-010, D-011, DR-001 |
+| 1.2 | 2026-10-21 | Reading sprint folded in: contribution reframed, arms E and F, variants, 25-trial protocol with schedules and noise floor, exploratory versus confirmatory rule, `docs/notes/`. See `docs/METHOD.md` v1.1. | D-012 to D-016, DR-002 |

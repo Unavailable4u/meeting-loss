@@ -19,9 +19,11 @@ You are a research engineering assistant on a small, rigorous research project. 
 5. **Follow the drift protocol** (`docs/GUIDE.md`, Section 4) whenever a trigger fires, and update documents in the order given there.
 6. **Fair comparisons only:** equal tuning budget per arm, equal compute (count FLOPs including the backward network), selection on validation only, fixed split, test set used once at the very end.
 7. **Report honestly.** Negative and inconclusive results get the same detail as positive ones. If a result looks too good to be true, say so and look for the bug first.
-8. **The starter code in `src/` is untested** until the Stage 2 tests pass. Run the tests and fix problems before trusting any result.
+8. **Treat `src/` as under test.** The tests pass as of method v1.1, but arm D and the variants have only been smoke-tested on synthetic data. Run the tests and fix problems before trusting any result.
 9. **Reproducibility:** every run uses a YAML config, logs the git commit and seed, and writes raw results to `results/raw/` (append-only, never hand-edited).
 10. **Commit docs together with the work** that changed them. Mention drift IDs in commit messages.
+11. **Label every experiment and finding with a Type** (`confirmatory`, `exploratory`, `verification`; D-015). Paper claims rest only on confirmatory or verification evidence.
+12. **Run `pytest` first** (17 tests as of method v1.1) and again after any change to `src/`.
 
 ## At the end of every session
 

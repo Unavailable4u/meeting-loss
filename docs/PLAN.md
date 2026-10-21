@@ -1,26 +1,26 @@
 # Plan
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-21 (v1.1 patch: reading sprint folded in, DR-002)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
-**Current stage:** Stage 0 (project setup)
+**Current stage:** Stage 1 (baseline tuning) with Stage 2 code ready (method v1.1)
 
 ## Current focus
 
-Finish Stage 0 and start the reading sprint and Stage 1 in parallel.
+Tune arm A under the D-014 protocol, measure the re-tuning noise floor, and finalize the D-003 targets, while running short exploratory diagnostic runs of the meeting-loss arms.
 
 ## Next three actions
 
-1. Review and commit this repo skeleton; create the remote repository and push (record the choice of host and visibility in DECISIONS).
-2. Start the reading sprint (five papers, below) and fill in `docs/LITERATURE.md` as you read.
-3. Start Stage 1: set up the environment and build the plain MNIST baseline (arm A).
+1. Apply the v1.1 patch (`git am`), run `pytest` (17 tests expected to pass), and push.
+2. Write `scripts/run_sweep.py` (25 random trials per arm, ranges in D-014) and tune arm A; then tune A a second time with independent seeds (re-tuning noise floor); then finalize and record D-003 (targets 0.97 and 0.975; 0.98 secondary) and decide whether to enlarge the validation split (F-002).
+3. Run short exploratory diagnostics (not results; log them as Type `exploratory`): arm D with `act` relu vs tanh, `h_var` and alignment over training, and the frozen-G and AO variants, to catch collapse or dead signals before the lock.
 
 ## Stage table
 
 | Stage | Name | Target weeks | Status | Exit criteria (short) |
 |---|---|---|---|---|
-| 0 | Project setup and documents | 1 | **In progress** | All living docs exist; D-001 to D-011 recorded; repo pushed |
-| 1 | Baseline reproduction | 1 | Not started | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
-| 2 | Implement the meeting loss and test it | 1 to 2 | Not started | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
+| 0 | Project setup and documents | 1 | **Done** (2026-10-21) | All living docs exist; decisions recorded; repo pushed |
+| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 done; tuning pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
+| 2 | Implement the meeting loss and test it | 1 to 2 | **Code ready** (method v1.1, 17 tests pass); diagnostic runs pending | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
 | 3 | Main comparison (arms A to D) | 2 to 3 | Not started | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
 | 4 | Diagnostics and ablations | 3 to 4 | Not started | Components that matter identified; H3 evaluated |
 | 5 | Generalization (CIFAR-10, modular arithmetic) | 4 to 6 | Not started | H4 evaluated on at least one setting beyond MNIST |
@@ -29,23 +29,13 @@ Finish Stage 0 and start the reading sprint and Stage 1 in parallel.
 
 Full task lists and gates for each stage are in `docs/GUIDE.md`, Section 6.
 
-## Reading sprint (2 to 3 days, in parallel with Stages 0 and 1; finish before the pre-registration lock)
+## Reading sprint: DONE (2026-10-21)
 
-Read each in three passes (abstract and figures, then method, then experiments and limitations). After each, fill in its row in `docs/LITERATURE.md`.
-
-| # | Paper | Why it matters |
-|---|---|---|
-| 1 | Lee et al. 2015, *Difference Target Propagation* | Closest relative of the design |
-| 2 | Bartunov et al. 2018, on scalability of biologically motivated algorithms | Shows this method family struggling at scale |
-| 3 | Rasmus et al. 2015, *Ladder Networks* | Combines bottom-up and top-down paths with matching |
-| 4 | Lee et al. 2015, *Deeply-Supervised Nets* | The arm B baseline |
-| 5 | Schmidt et al. 2021, *Descending through a Crowded Valley* | Evaluation rigor |
-
-If any paper already does the auxiliary meeting loss in essentially the same form, that is a drift trigger: record it, and adjust the hypothesis before running the main experiments.
+All five papers were read in full; notes are in `docs/LITERATURE.md` and `docs/notes/dsn-reference-notes.md`. Outcome: the loss is the SDTP/DTP target, so the contribution was reframed (D-012), and arms, tuning protocol and method were updated (D-013, D-014; DR-002). Still to do before the `prereg-v1` lock: skim the first three "found by search" papers in `docs/LITERATURE.md` (Meulemans et al. 2020, the difference-reconstruction-loss work, fixed-weight DTP) and repeat a literature search.
 
 ## Limits to prevent forking paths
 
-- Maximum pre-listed variants per stage: **3** (log every variant tried, including failures).
+- Maximum pre-listed variants of the meeting loss per stage: **3** (V1 noise in the inverse loss, V2 augmented output, V3 frozen random G; D-013). B-code is a baseline-implementation variant and does not count. Log every variant tried, including failures.
 - The pre-registration lock (git tag `prereg-v1`) happens **before** the Stage 3 main runs.
 
 ## What would make us stop or pivot
@@ -66,3 +56,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
 | Date | Note |
 |---|---|
 | 2026-10-21 | Repo created. Three guides added under `docs/`. D-001 to D-011 and DR-001 recorded. |
+| 2026-10-21 | Stage 1 untuned baseline logged (E-001, 5 seeds). v1.1 patch: D-012 to D-016, DR-002, F-001 to F-003, method v1.1 (arms E, F, variants V1 to V3), 17 tests. |

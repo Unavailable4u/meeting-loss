@@ -1,13 +1,15 @@
-"""Training loop and CLI. UNTESTED starter code (docs/RISKS.md R-10).
+"""Training loop and CLI (method v1.1).
 
 Usage:  python -m src.train --config configs/stage1_baseline.yaml [--seed 1]
 Writes an append-only run log to results/raw/<run_id>.jsonl (first line = header with the
 config, config hash and git commit). Never edit raw results by hand.
+See configs/template_all_options.yaml for every config key.
 """
 import argparse
 import datetime
 import hashlib
 import json
+import math
 import pathlib
 import subprocess
 import time
@@ -15,10 +17,9 @@ import time
 import torch
 import yaml
 
-from src.data import get_data
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
-from src.model import MeetNet, compute_losses
+from src.model import MEET_ARMS, MeetNet, compute_losses
 from src.utils import set_seed
 
 
@@ -34,11 +35,55 @@ def evaluate(model, loader, device):
     return correct / n
 
 
-def run(cfg, device="cpu"):
+def lr_factors(cfg):
+    """Learning-rate factors as functions of the step, for (low, rest, aux) parameter groups.
+
+    lr_schedule:  "constant" (default) or "cosine" (decays to zero over max_steps).
+    aux_lr_decay: "none" (default) or "power_inv" (DSN reference code: (1 + 1e-4*step)^-0.75 on
+                  the companion head, on top of the base schedule).
+    """
+    T = max(1, cfg.get("max_steps", 1))
+    if cfg.get("lr_schedule", "constant") == "cosine":
+        base = lambda s: 0.5 * (1.0 + math.cos(math.pi * min(1.0, s / T)))
+    else:
+        base = lambda s: 1.0
+    if cfg.get("aux_lr_decay", "none") == "power_inv":
+        aux = lambda s: base(s) * (1.0 + 1e-4 * s) ** -0.75
+    else:
+        aux = base
+    return base, base, aux
+
+
+def build_optimizer(model, cfg):
+    """AdamW with parameter groups: lower layers (lr * low_lr_mult, control E), all other
+    trainable parameters, and the companion head of arm B in its own group. With default
+    settings this is mathematically identical to one AdamW over model.parameters()."""
+    lr = cfg["lr"]
+    low = list(model.low.parameters())
+    aux = list(model.aux.parameters()) if hasattr(model, "aux") else []
+    skip = {id(p) for p in low + aux}
+    rest = [p for p in model.parameters() if p.requires_grad and id(p) not in skip]
+    f_low, f_rest, f_aux = lr_factors(cfg)
+    entries = [(low, lr * cfg.get("low_lr_mult", 1.0), f_low), (rest, lr, f_rest)]
+    if aux:
+        entries.append((aux, lr, f_aux))
+    entries = [e for e in entries if e[0]]             # drop empty groups
+    opt = torch.optim.AdamW([dict(params=ps, lr=l) for ps, l, _ in entries],
+                            lr=lr, weight_decay=cfg["wd"])
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=[f for _, _, f in entries])
+    return opt, sched
+
+
+def run(cfg, device="cpu", data=None):
+    """Train one run. `data` may be a (train_loader, val_loader) pair (used by tests);
+    by default the fixed MNIST split from src/data.py (decision D-008) is loaded."""
     set_seed(cfg["seed"])
-    train_loader, val_loader = get_data(cfg["batch_size"], cfg["seed"])
-    model = MeetNet(arm=cfg["arm"]).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["wd"])
+    if data is None:
+        from src.data import get_data               # imported lazily: needs torchvision
+        data = get_data(cfg["batch_size"], cfg["seed"])
+    train_loader, val_loader = data
+    model = MeetNet(arm=cfg["arm"], act=cfg.get("act", "relu")).to(device)
+    opt, sched = build_optimizer(model, cfg)
     bx, by = next(iter(train_loader))
     fps = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg)
 
@@ -50,13 +95,14 @@ def run(cfg, device="cpu"):
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
+            sched.step()
             step += 1
             if step % cfg["eval_every"] == 0:
                 row = dict(step=step, flops=step * fps, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),
                            **{k: v.item() for k, v in parts.items()})
-                if cfg["arm"] == "meet":
-                    row["align"] = grad_alignment(model, x, y)
+                if cfg["arm"] in MEET_ARMS or cfg["arm"] == "meet_grad":
+                    row["align"] = grad_alignment(model, x, y, cfg)
                     row["h_var"] = mid_state_variance(model, x)
                 log.append(row)
             if step >= cfg["max_steps"]:

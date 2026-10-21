@@ -9,7 +9,7 @@ LIVING DRAFT RULES (docs/GUIDE.md, Section 7)
 Terminology must match docs/METHOD.md. Related Work must match the novelty statement in docs/LITERATURE.md.
 -->
 
-# <Working title: e.g. "Meeting in the Middle: A Bidirectional Target Loss for Faster Training">
+# <Working title: e.g. "A Target-Propagation Auxiliary Loss Next to Backpropagation: A Compute-Matched Study">
 
 Status: skeleton | Version: v0.1 | Last checked against FINDINGS: YYYY-MM-DD
 
@@ -21,15 +21,15 @@ Problem (1 sentence) → idea (1) → key result with number [C-..] (1) → scop
 Status: skeleton | Depends on: H1-H4, LITERATURE
 - The cost of training and the credit-assignment path
 - The idea in one paragraph
-- Contributions (each one a claim ID): [C-01] ... [C-02] ...
+- Contributions (each one a claim ID): [C-01] compute-matched efficiency result; [C-02] specificity against DSN-style and autoencoder auxiliaries; [C-06] not a learning-rate artifact; [C-03] mechanism (gradient alignment). State plainly that the loss is the SDTP target [C-05]; the study is the contribution.
 
 ## 2. Related work
 Status: skeleton | Depends on: LITERATURE.md
-- Target propagation and difference target propagation
-- Auxiliary and deep-supervision losses
+- Target propagation, difference target propagation (Lee et al.), and simplified DTP (Bartunov et al.): our target is the SDTP target [C-05]; later theory (Meulemans et al.) and variants (fixed-weight DTP)
+- Auxiliary and deep-supervision losses: DSN (Lee et al.), including the paper-versus-code difference in how the companion objective fades
 - Ladder networks, autoencoder and cycle-consistency objectives
 - Predictive coding and local-learning rules
-- Efficient optimizers
+- Evaluation methodology: Schmidt et al. (budgets, schedules, seeds, re-tuning noise)
 - How this work differs (must match novelty notes in DECISIONS)
 
 ## 3. Method

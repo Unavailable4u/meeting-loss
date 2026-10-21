@@ -1,22 +1,22 @@
-"""Diagnostics for H3 (gradient alignment) and for collapse. UNTESTED starter code."""
+"""Diagnostics for H3 (gradient alignment) and for collapse. Uses the same code path as training."""
 import torch
 import torch.nn.functional as F
 
+from src.model import compute_losses
 
-def grad_alignment(model, x, y):
-    """Cosine similarity between the task gradient and the meeting gradient
-    on the lower layers (arm D only)."""
+_DEFAULT_CFG = dict(lam_inv=1.0, lam_meet=0.1, warmup_steps=1, lam_aux=0.0)
+
+
+def grad_alignment(model, x, y, cfg=None):
+    """Cosine similarity between the task gradient and the meeting-loss gradient on the lower
+    layers. Returns NaN for arms without a meeting loss."""
+    if not hasattr(model, "G") and model.arm != "meet_grad":
+        return float("nan")
+    cfg = {**_DEFAULT_CFG, **(cfg or {})}
     params = list(model.low.parameters())
-    h = model.low(x)
-    z = model.up(h)
-    L_task = F.cross_entropy(z, y)
-    p = z.detach().softmax(-1)
-    with torch.no_grad():
-        e_y = F.one_hot(y, model.n_cls).float()
-        b = h.detach() + model.G(e_y) - model.G(p)
-    L_meet = F.mse_loss(h, b)
-    g_task = torch.autograd.grad(L_task, params, retain_graph=True)
-    g_meet = torch.autograd.grad(L_meet, params)
+    _, parts, _, _ = compute_losses(model, x, y, cfg, step=10**9)
+    g_task = torch.autograd.grad(parts["task"], params, retain_graph=True)
+    g_meet = torch.autograd.grad(parts["meet"], params, retain_graph=True)
     flat = lambda gs: torch.cat([g.reshape(-1) for g in gs])
     return F.cosine_similarity(flat(g_task), flat(g_meet), dim=0).item()
 
