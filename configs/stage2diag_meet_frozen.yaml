@@ -1,0 +1,26 @@
+# Template listing EVERY config key with its default (method v1.1, docs/METHOD.md).
+# Copy this file to a new config for each experiment family. Do not edit configs that were
+# already used for logged runs (e.g. stage1_baseline.yaml).
+stage: stage2diag
+arm: meet_frozen
+seed: 0
+act: relu                      # relu | tanh  (categorical hyperparameter of every arm, D-013)
+lr: 0.001
+wd: 0.0001
+batch_size: 128
+max_steps: 2000
+eval_every: 50
+device: auto
+lr_schedule: constant          # constant | cosine   (D-014)
+low_lr_mult: 1.0               # control E: lr multiplier on the lower layers (any arm)
+# meeting-loss arms (meet, meet_ao, meet_frozen, meet_grad)
+lam_meet: 0.1
+lam_inv: 1.0                   # ignored by meet_frozen / meet_grad
+warmup_steps: 500
+sigma_inv: 0.0                 # V1: > 0 adds noise to the inverse loss (denoising), meet / meet_ao only
+eta_hat: 0.1                   # meet_grad only: target = h - eta_hat * per-sample dL/dh
+# auxiliary-loss arms (deepsup B, ae C)
+lam_aux: 0.3
+aux_sched: const               # const | linear (decays to zero over max_steps, DSN paper)
+aux_gamma: 0.0                 # deepsup: companion loss counts only above this threshold (DSN paper)
+aux_lr_decay: none             # none | power_inv (DSN reference code, companion head only)
