@@ -29,3 +29,19 @@ Rules:
 - Valid: yes
 - Interpretation: the v1.1 optimizer groups, scheduler and lazy data loading reproduce the original training exactly at default settings, so E-001 and later arm A runs remain comparable.
 - Follow-ups: none.
+
+## E-003: Stage 2 diagnostic runs of the meeting-loss arms (meet, meet_ao, meet_frozen), seed 0, 2000 steps
+- Type: exploratory (collapse and dead-signal check; no hypothesis tested; not a result)
+- Date / Stage / Hypothesis tested (H-ID): 2026-10-22 / Stage 2 / none (informs H3 and risk R-03 only)
+- Git commit / config file(s) / seeds: 4c3d4ee (see `git_commit` in each run header) / configs/stage2diag_meet.yaml, configs/stage2diag_meet_ao.yaml, configs/stage2diag_meet_frozen.yaml (copies of template_all_options.yaml with `stage: stage2diag`, the arm changed, `max_steps: 2000`; so relu, constant learning rate 1e-3, wd 1e-4, `lam_meet` 0.1, `lam_inv` 1.0, `warmup_steps` 500, untuned) / seed 0
+- Reproduce with: `for arm in meet meet_ao meet_frozen; do python -m src.train --config configs/stage2diag_$arm.yaml --seed 0; done`
+- Result summary (raw: results/raw/20261022_stage2diag_{meet,meet_ao,meet_frozen}_s0.jsonl; 40 evaluations each, all values finite):
+  - Validation accuracy at steps 1000 / 2000: arm A seed 0 (E-001) 0.9680 / 0.9758; meet 0.9672 / 0.9750; meet_ao 0.9706 / 0.9716; meet_frozen 0.9700 / 0.9752. Mean of the last five evaluations (steps 1800 to 2000): A 0.9755, meet 0.9740, meet_ao 0.9703, meet_frozen 0.9757. All within about 0.4 points of arm A, comparable to the validation sampling error (about 0.2 points, F-002).
+  - FLOPs per step: meet 190,578,688 (+22.9%), meet_ao 224,133,120 (+44.5%), meet_frozen 173,146,112 (+11.7%) versus 155,058,176 for arm A, matching F-003.
+  - Gradient alignment `align`, after warm-up (30 evaluations, steps 550 to 2000): meet positive at 100% of evaluations (median 0.50, range 0.34 to 0.66, falling from about 0.65 at step 1000 to 0.34 at step 2000); meet_ao positive at 100% but small and falling (median 0.22, range 0.004 to 0.58, 0.14 at step 2000); meet_frozen positive at only 33% (median -0.02, range -0.18 to +0.18).
+  - Variance of the middle state `h_var`: no collapse in any run, but it grows: meet 4.3 to 13.2 (peak 16.2), meet_ao 4.0 to 58.2, meet_frozen 4.1 to 22.9. Arm A's `h_var` was not logged, so how much of this growth is ordinary training is unknown.
+  - Inverse loss `inv`: meet peaks at 62 early and ends at 8.3; meet_ao rises from 1.6 to 41.3 and is still rising at step 2000.
+  - Wall time about 155 s per run on the laptop CPU.
+- Valid: yes
+- Interpretation: Nothing is broken: no NaN, no collapse, accuracy tracks the baseline. Arm D has a clearly positive alignment with the task gradient, the variant V2 a weaker and decaying one, and the frozen random G has essentially none, as expected for a random feedback network. Its accuracy is nevertheless the same as arm A's, which fits a meeting term with little effect. At equal steps none of the three is better than arm A, while each costs 12% to 45% more FLOPs per step, so at these untuned settings none would beat arm A on FLOPs-to-target (risk R-02). This is one seed with untuned loss weights, so it neither supports nor refutes H1 or H3. Two things to watch: the `h_var` growth, and the V2 inverse loss rising together with it (its backward network `G` may not be keeping up with the growing scale of `h`).
+- Follow-ups: sweeps with the D-017 protocol (`scripts/run_sweep.py`); log `h_var` for arm A so that the growth can be compared (needs a `src/` change, so ask first); recheck V2 over a longer run before deciding whether it stays among the three pre-listed variants.

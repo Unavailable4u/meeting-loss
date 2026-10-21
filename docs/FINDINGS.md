@@ -36,3 +36,12 @@ Rules:
 - Scope: this MLP (784-256-128-256-10, `d_aux` 128), one training step including all extra forwards and backwards, optimizer FLOPs excluded.
 - Implications: to win at equal FLOPs, arm D must reduce steps-to-target by more than about 19% (1 - 1/1.2291) just to break even on FLOPs. The autoencoder arm C is costly because it reconstructs the 784-dimensional input. The frozen-G variant V3 is the cheapest meeting-loss variant. This sharpens risk R-02.
 - Found / last re-verified: 2026-10-21
+
+## F-004: In short untuned diagnostic runs the meeting loss neither collapses nor helps at equal steps; alignment is positive for D, weaker for V2, and about zero for the frozen G
+- Type: exploratory
+- Status: tentative
+- Confidence: low (one seed per arm, 2,000 steps, untuned loss weights, validation sampling error about 0.2 points)
+- Evidence: E-003. No non-finite values and no collapse of `h_var` in any of the three runs. Alignment after warm-up is positive at 100% of evaluations for meet (median 0.50) and meet_ao (median 0.22), and at 33% for meet_frozen (median -0.02). Validation accuracy tracks arm A seed 0 within about 0.4 points (last-five mean: A 0.9755, meet 0.9740, meet_ao 0.9703, meet_frozen 0.9757). `h_var` grows (meet 4.3 to 13.2, meet_ao 4.0 to 58.2, meet_frozen 4.1 to 22.9) and the V2 inverse loss rises from 1.6 to 41.3.
+- Scope: MNIST MLP, AdamW, constant learning rate 1e-3, `lam_meet` 0.1, `lam_inv` 1.0, warm-up 500, ReLU, seed 0.
+- Implications: the implementation is usable for the sweeps. At equal steps there is no visible gain while the arms cost 12% to 45% more FLOPs per step (F-003), so any gain has to come out of tuning (risk R-02). The frozen G behaves as a near-null control. Not evidence for or against H1 or H3. Recheck V2 over a longer run, because its inverse loss is still rising at step 2000.
+- Found / last re-verified: 2026-10-22
