@@ -65,3 +65,13 @@ Rules:
 - Scope: this sweep only; selection results, not confirmatory evidence (D-015).
 - Implications: D is behind A by 17% to 31% on every rule and view, and its best trials use a small `lam_meet` (E-004), so there is no sign of a gain at these settings. B is ahead of A by 11% to 23% under the two smoothed rules, and by 18% held-out but only level in-sample (1.03) under first crossing, and tuning noise of this size is not yet measured, so the B-versus-A difference is not a result until the re-tuning noise floor (tag t2) says how far arm A's own score moves between two tunings (D-014, R-17). E's held-out score is unstable (1.22 to 1.88), which confirms that E needs a better tuning protocol before H5 (to be decided).
 - Found / last re-verified: 2026-10-22
+- Update (2026-10-22, E-005, F-007): the re-tuning pass t2 shows no shift in arm A's winning score (0.0% under the adopted rule), so the B-versus-A difference above exceeds the selection-level noise floor; it is still to be confirmed with final seeds.
+
+## F-007: Re-tuning arm A with independent seeds reproduces its selection score; deep supervision (B) is ahead of both tunings at the selection level
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (selection seeds only; one pair of tunings of A; 25 trials per arm; scores on a 50-step grid)
+- Evidence: E-005 and E-004 under the adopted rule (D-018). Arm A: both tunings score 232.6 GFLOPs (mean 1500 steps) although their winning hyperparameters differ widely; the top six trials of each tuning lie between 232.6 and 263.6. Arm B: the winner t10 scores 191.2 (steps 1200 and 1250), the runner-up 218.5, the third 245.8. B's t10 is also the best trial when picked on either seed alone (held-out score 191.2, ratio 0.77 to A's held-out 248.1). A's winners have a larger seed spread (steps 1250 and 1750; 1600 and 1400).
+- Scope: MNIST MLP, selection seeds 1000, 1001, 2000, 2001, 3,000-step runs.
+- Implications: the tuned baseline is stable at the selection level, which lowers the worry that arm A is a weak or lucky baseline (R-17), though the final-seed noise floor of D-014 is still to be measured. B ahead of A by about 18% (6% for its runner-up) is a lead worth testing with final seeds; it is not a result. If it holds, B is the arm that D has to beat for H2, and D (1.19 times A) has a larger gap to close.
+- Found / last re-verified: 2026-10-22

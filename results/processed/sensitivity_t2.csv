@@ -1,0 +1,4 @@
+rule,arm,winner_trial,in_sample_gflops,ratio_to_ref,held_out_gflops,held_out_ratio_to_ref,n_seeds_reached,trials_reaching_in_any_seed,n_trials
+first,base,9,186.0698112,1.0,186.0698112,1.0,2/2,16,25
+two,base,2,232.587264,1.0,240.3401728,1.0,2/2,14,25
+mean3,base,22,224.8343552,1.0,248.0930816,1.0,2/2,14,25
