@@ -17,6 +17,7 @@ import time
 import torch
 import yaml
 
+from src.crossing import DEFAULT_CROSSING, crossing_index
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
 from src.model import MEET_ARMS, MeetNet, compute_losses
@@ -110,13 +111,12 @@ def run(cfg, device="cpu", data=None):
     return log
 
 
-def steps_to_target(log, target):
-    """First (step, flops) at which validation accuracy reaches target; None if never.
-    A run that never reaches the target must be recorded, never dropped."""
-    for row in log:
-        if row["val_acc"] >= target:
-            return row["step"], row["flops"]
-    return None
+def steps_to_target(log, target, rule=DEFAULT_CROSSING):
+    """(step, flops) at which validation accuracy reaches target under `rule` (src/crossing.py;
+    default D-018: two consecutive evaluations at or above the target, reported at the first of them);
+    None if never. A run that never reaches the target must be recorded, never dropped."""
+    i = crossing_index([row["val_acc"] for row in log], target, rule)
+    return None if i is None else (log[i]["step"], log[i]["flops"])
 
 
 def main():

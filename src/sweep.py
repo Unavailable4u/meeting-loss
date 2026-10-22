@@ -1,14 +1,16 @@
-"""Random-search tuning and analysis helpers (decisions D-014 and D-017).
+"""Random-search tuning and analysis helpers (decisions D-014, D-017 and D-018).
 
 Everything that is not command-line plumbing lives here so that it can be unit-tested:
 the search spaces, the trial sampler, the job runner, the selection rule, and the bootstrap
 statistics. The command-line entry points are scripts/run_sweep.py and scripts/analyze.py.
 
-Selection rule (D-017): a trial's score is the mean over its selection seeds of the FLOPs needed
-to first reach SELECTION_TARGET validation accuracy. A run that never reaches the target is scored
-with its full budget (the FLOPs of the whole run, so an arm's extra cost is counted). Lower is
-better. Ties are broken by the higher mean validation accuracy over the last LATE_K evaluations,
-then by the lower trial index.
+Selection rule (D-017, with the crossing definition of D-018): a trial's score is the mean over its
+selection seeds of the FLOPs needed to reach SELECTION_TARGET validation accuracy, where "reach" is
+defined in src/crossing.py (default: two consecutive evaluations at or above the target). A run that
+never reaches the target is scored with its full budget (the FLOPs of the whole run, so an arm's
+extra cost is counted). Lower is better. Ties are broken by the higher mean validation accuracy over
+the last LATE_K evaluations, then by the lower trial index. Scores are computed from the saved
+curves at analysis time, so the crossing rule can be changed without rerunning anything.
 """
 import datetime
 import hashlib
@@ -24,7 +26,9 @@ from functools import lru_cache
 import numpy as np
 import yaml
 
-REPO = pathlib.Path(__file__).resolve().parents[1]
+from src.crossing import CROSSINGS, DEFAULT_CROSSING, crossing_index
+
+REPO =pathlib.Path(__file__).resolve().parents[1]
 TEMPLATE = REPO / "configs" / "template_all_options.yaml"
 SWEEP_ROOT = pathlib.Path("results/raw/sweeps")
 
@@ -227,17 +231,18 @@ def load_run(path):
     return lines[0], lines[1:]
 
 
-def score_run(rows, target=SELECTION_TARGET, late_k=LATE_K):
-    """Selection score of one run. `score` is the FLOPs at the first evaluation with
-    val_acc >= target, or the full-run FLOPs if the target is never reached."""
+def score_run(rows, target=SELECTION_TARGET, late_k=LATE_K, crossing=DEFAULT_CROSSING):
+    """Selection score of one run. `score` is the FLOPs at the evaluation where the run reaches the
+    target under `crossing` (src/crossing.py), or the full-run FLOPs if it never does."""
     if not rows:
         raise ValueError("empty run")
     budget = rows[-1]["flops"]
     late = float(np.mean([r["val_acc"] for r in rows[-late_k:]]))
-    for r in rows:
-        if r["val_acc"] >= target:
-            return dict(reached=True, steps=r["step"], flops=r["flops"], score=r["flops"],
-                        budget=budget, final_val=rows[-1]["val_acc"], late_val=late)
+    i = crossing_index([r["val_acc"] for r in rows], target, crossing)
+    if i is not None:
+        r = rows[i]
+        return dict(reached=True, steps=r["step"], flops=r["flops"], score=r["flops"],
+                    budget=budget, final_val=rows[-1]["val_acc"], late_val=late)
     return dict(reached=False, steps=None, flops=None, score=budget,
                 budget=budget, final_val=rows[-1]["val_acc"], late_val=late)
 
@@ -257,9 +262,9 @@ def select_best(trials):
     return min(trials, key=lambda t: (t["score"], -t["late_val"], t["trial"]))
 
 
-def collect_sweep(tag, arms=None, root=SWEEP_ROOT, target=SELECTION_TARGET):
+def collect_sweep(tag, arms=None, root=SWEEP_ROOT, target=SELECTION_TARGET, crossing=DEFAULT_CROSSING):
     """Read a sweep directory. Returns {arm: {"trials": [...], "incomplete": [...], "meta": {...}}}.
-    A trial is complete when every seed listed in the arm's manifest has a log."""
+    A trial is complete when every seed listed in the arm's manifest has a log. Scores use `crossing`."""
     base = pathlib.Path(root) / tag
     if not base.exists():
         raise FileNotFoundError(base)
@@ -278,7 +283,8 @@ def collect_sweep(tag, arms=None, root=SWEEP_ROOT, target=SELECTION_TARGET):
                 continue
             runs.setdefault(sw["trial"], {"hp": sw["hp"], "seeds": {}, "cfg": hdr["config"]})
             runs[sw["trial"]]["seeds"][hdr["config"]["seed"]] = dict(
-                score_run(rows, target), path=str(p), complete=rows[-1]["step"] == hdr["config"]["max_steps"])
+                score_run(rows, target, crossing=crossing), path=str(p),
+                complete=rows[-1]["step"] == hdr["config"]["max_steps"])
         want = set(meta["seeds"])
         trials, incomplete = [], []
         for i in range(meta["n_trials"]):
@@ -294,13 +300,15 @@ def collect_sweep(tag, arms=None, root=SWEEP_ROOT, target=SELECTION_TARGET):
     return out
 
 
-def tuned_config(trial_cfg, tag, arm, source_note):
+def tuned_config(trial_cfg, tag, arm, source_note, crossing=DEFAULT_CROSSING):
     """Config for the final runs of the selected trial: same hyperparameters, seed reset to 0
-    (final seeds are passed with --seed), stage named after the tuning pass and sweep arm.
+    (final seeds are passed with --seed), stage named after the tuning pass, sweep arm and crossing
+    rule (so that configs selected under different rules cannot be mixed up in run ids).
     The horizon (max_steps) is kept from the sweep: cosine schedules depend on it."""
     cfg = dict(trial_cfg)
-    cfg.update(seed=0, stage=f"final-{tag}-{arm}")
-    header = (f"# Selected by D-017 from sweep '{tag}', arm '{arm}'.\n# {source_note}\n"
+    cfg.update(seed=0, stage=f"final-{tag}-{arm}-{crossing}")
+    header = (f"# Selected by D-017/D-018 from sweep '{tag}', arm '{arm}', crossing rule '{crossing}'.\n"
+              f"# {source_note}\n"
               f"# Run final seeds with: python -m src.train --config <this file> --seed N\n")
     return header + yaml.safe_dump(cfg, sort_keys=False)
 
@@ -328,7 +336,7 @@ def paired_pct_change(ref, grp, n_boot=10000, alpha=0.05, seed=0):
     return float(point), float(np.quantile(stat, alpha / 2)), float(np.quantile(stat, 1 - alpha / 2))
 
 
-def group_scores(paths, targets):
+def group_scores(paths, targets, crossing=DEFAULT_CROSSING):
     """{seed: {target: score_run(...)}} for a set of final-run logs. Duplicate seeds are an error
     (they usually mean the glob matched two different configurations)."""
     out = {}
@@ -337,5 +345,19 @@ def group_scores(paths, targets):
         seed = hdr["config"]["seed"]
         if seed in out:
             raise ValueError(f"seed {seed} appears twice in one group (check the glob); second file: {p}")
-        out[seed] = {t: score_run(rows, t) for t in targets}
+        out[seed] = {t: score_run(rows, t, crossing=crossing) for t in targets}
     return out
+
+
+def cross_seed_check(trials, seeds):
+    """Selection-bias check for ONE arm: pick the best trial using only seed a, then score that trial
+    on seed b; average over the two directions (for exactly two selection seeds). Returns
+    (score_selected_on_one_seed_tested_on_the_other, [(selected_trial, held_out_score), ...]).
+    The in-sample winning score is optimistic because the winner was picked on the same seeds."""
+    if len(seeds) != 2:
+        raise ValueError("cross_seed_check needs exactly two selection seeds")
+    out = []
+    for a, b in ((seeds[0], seeds[1]), (seeds[1], seeds[0])):
+        best = min(trials, key=lambda t: (t["per_seed"][a]["score"], t["trial"]))
+        out.append((best["trial"], best["per_seed"][b]["score"]))
+    return float(np.mean([s for _, s in out])), out

@@ -1,3 +1,4 @@
+# SUPERSEDED by D-018 (2026-10-22): selected under the first-crossing rule. Do not use for final runs; use configs/tuned/t1_ae_two.yaml.
 # Selected by D-017 from sweep 't1', arm 'ae'.
 # trial t22, score 384519372800 FLOPs, reached 2/2 seeds, sweep max_steps 3000
 # Run final seeds with: python -m src.train --config <this file> --seed N

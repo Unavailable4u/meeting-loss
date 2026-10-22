@@ -97,11 +97,19 @@ def test_job_order_is_trial_major_so_a_stopped_sweep_stays_balanced():
     assert [(j.trial, j.arm) for j in jobs[:4]] == [(0, "base"), (0, "base"), (0, "meet"), (0, "meet")]
 
 
-# --- selection rule (D-017) --------------------------------------------------------------------
-def test_score_is_flops_at_first_crossing():
-    rows = _fake_log([0.90, 0.96, 0.976, 0.97, 0.98])      # first >= 0.975 at the 3rd evaluation
+# --- selection rule (D-017) and crossing definition (D-018) ---------------------------------------
+def test_default_score_needs_two_consecutive_evaluations():
+    # one lucky evaluation at 0.976 (3rd) is followed by a drop; the real crossing is at the 5th
+    rows = _fake_log([0.90, 0.96, 0.976, 0.97, 0.976, 0.977, 0.98])
     s = sweep.score_run(rows)
-    assert s["reached"] and s["steps"] == 150 and s["flops"] == 300.0 and s["score"] == 300.0
+    assert s["reached"] and s["steps"] == 250 and s["flops"] == 500.0 and s["score"] == 500.0
+    f = sweep.score_run(rows, crossing="first")                  # the pre-D-018 definition
+    assert f["steps"] == 150 and f["score"] == 300.0
+
+
+def test_a_lone_final_evaluation_at_target_does_not_count():
+    s = sweep.score_run(_fake_log([0.90, 0.96, 0.976]))
+    assert not s["reached"] and s["score"] == 300.0              # scored with the full budget
 
 
 def test_run_that_never_reaches_target_is_scored_with_full_budget():
@@ -118,8 +126,8 @@ def test_trial_score_is_the_mean_over_seeds_with_misses_at_full_budget():
 
 
 def test_extra_compute_is_counted_by_the_selection_score():
-    cheap = sweep.score_run(_fake_log([0.9, 0.976], flops_per_eval=100))
-    costly = sweep.score_run(_fake_log([0.9, 0.976], flops_per_eval=123))     # same steps, +23% FLOPs
+    cheap = sweep.score_run(_fake_log([0.9, 0.976, 0.976], flops_per_eval=100))
+    costly = sweep.score_run(_fake_log([0.9, 0.976, 0.976], flops_per_eval=123))   # same steps, +23% FLOPs
     assert costly["steps"] == cheap["steps"] and costly["score"] > cheap["score"]
 
 
@@ -199,7 +207,9 @@ def test_tuned_config_keeps_hyperparameters_and_resets_seed():
     text = sweep.tuned_config(cfg, "t1", "meet", "note")
     import yaml
     out = yaml.safe_load(text)
-    assert out["seed"] == 0 and out["stage"] == "final-t1-meet" and out["max_steps"] == cfg["max_steps"]
+    assert out["seed"] == 0 and out["max_steps"] == cfg["max_steps"]
+    assert out["stage"] == "final-t1-meet-two"                    # the crossing rule is part of the stage name
+    assert sweep.tuned_config(cfg, "t1", "meet", "note", crossing="first").count("final-t1-meet-first") == 1
     assert {k: v for k, v in out.items() if k not in ("seed", "stage")} == \
            {k: v for k, v in cfg.items() if k not in ("seed", "stage")}
 
@@ -232,7 +242,19 @@ def test_group_scores_rejects_two_runs_with_the_same_seed(tmp_path):
         p.write_text(json.dumps({"_header": True, "config": {"seed": seed}}) + "\n"
                      + "\n".join(json.dumps(r) for r in _fake_log([0.9, 0.98])) + "\n")
         return str(p)
-    ok = sweep.group_scores([write("a.jsonl", 0), write("b.jsonl", 1)], [0.97])
+    ok = sweep.group_scores([write("a.jsonl", 0), write("b.jsonl", 1)], [0.97], crossing="first")
     assert sorted(ok) == [0, 1] and ok[0][0.97]["reached"]
     with pytest.raises(ValueError):
         sweep.group_scores([write("c.jsonl", 3), write("d.jsonl", 3)], [0.97])
+
+
+# --- selection-bias check ------------------------------------------------------------------------
+def test_cross_seed_check_selects_on_one_seed_and_scores_on_the_other():
+    def t(i, s_a, s_b):
+        return dict(trial=i, per_seed={100: dict(score=s_a), 101: dict(score=s_b)})
+    trials = [t(0, 100.0, 300.0), t(1, 200.0, 150.0), t(2, 400.0, 100.0)]
+    mean, picks = sweep.cross_seed_check(trials, [100, 101])
+    # picked on seed 100 -> trial 0, held-out score 300; picked on seed 101 -> trial 2, held-out score 400
+    assert picks == [(0, 300.0), (2, 400.0)] and mean == 350.0
+    with pytest.raises(ValueError):
+        sweep.cross_seed_check(trials, [100])

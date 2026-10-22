@@ -45,3 +45,23 @@ Rules:
 - Scope: MNIST MLP, AdamW, constant learning rate 1e-3, `lam_meet` 0.1, `lam_inv` 1.0, warm-up 500, ReLU, seed 0.
 - Implications: the implementation is usable for the sweeps. At equal steps there is no visible gain while the arms cost 12% to 45% more FLOPs per step (F-003), so any gain has to come out of tuning (risk R-02). The frozen G behaves as a near-null control. Not evidence for or against H1 or H3. Recheck V2 over a longer run, because its inverse loss is still rising at step 2000.
 - Found / last re-verified: 2026-10-22
+
+## F-005: Control F (`meet_grad`) is nearly inert: its gradient on the middle state is 2*lam_meet*eta_hat/d times the task gradient
+- Type: verification (derivation plus measurement; tests no hypothesis)
+- Status: supported
+- Confidence: high (analytic and measured, agree to five digits)
+- Evidence: With `L_meet = mean((h - b)^2)` over B*d elements and `b = sg(h - eta_hat*B*g_h)`, where `g_h` is the gradient of the batch-mean task loss, the gradient of `lam_meet*L_meet` on `h` is `2*lam_meet*eta_hat*g_h/d`, parallel to `g_h` and smaller by that factor. Measured on a random batch with `src/model.py` (d = 128, eta_hat = 0.1): ratio of norms 0.00006 at lam_meet = 0.0382 (the t1 winner), 0.00156 at 1.0, 0.01375 at 8.8, against 0.00006, 0.00156 and 0.01375 predicted. E-004: F's winner scores 1.10 times arm A's under first crossing and 0.99 times under two consecutive evaluations (F-006), which is what arm A plus 5.8% FLOPs overhead (F-003) and tuning noise would give.
+- Scope: this implementation, d_mid = 128, eta_hat = 0.1, `lam_meet` anywhere in the D-014 range (at most 1.4% of the task gradient at lam_meet = 8.8).
+- Implications: F cannot serve as an upper bound or as an informative reference for gradient alignment (H3) or for H5; report it as a negative control. Because the factor is tiny for any optimizer, the D-013 remark that F is informative under SGD with momentum does not hold at these settings. A meaningful F needs a larger effective step (a rescaled `eta_hat`, or a sum instead of a mean in `L_meet`); that changes the method, so it needs its own decision before the SGD experiments (R-19).
+- Found / last re-verified: 2026-10-22
+
+## F-006: Rankings among the top arms depend on the crossing rule; the meeting loss (D) is behind A under all three rules in the t1 selection sweep
+- Type: exploratory
+- Status: tentative
+- Confidence: low (selection seeds 1000 and 1001 only, 25 trials per arm, 3,000 steps, 5,000-sample validation set)
+- Evidence: E-004 re-scored with `scripts/rescore_sensitivity.py` (`results/processed/sensitivity_t1.csv`). Ratio of an arm's winning score to arm A's, in-sample / held-out (best trial picked on one seed, scored on the other seed, averaged over both directions), under first crossing, two consecutive (adopted, D-018) and a 3-evaluation mean:
+  D meet 1.31 / 1.17, 1.19 / 1.29, 1.25 / 1.25. B deepsup 1.03 / 0.82, 0.82 / 0.77, 0.89 / 0.79. F meet_grad 1.10 / 1.08, 0.99 / 1.01, 1.06 / 0.98. E base_lowlr 1.38 / 1.22, 1.18 / 1.88, 1.25 / 1.61. C ae 2.07 / 1.87, 1.80 / 1.99, 1.90 / 2.03.
+  Arm A's own score is 186 GFLOPs in-sample under first crossing and 233 under two consecutive; its held-out score is 233 and 248, so in-sample scores are optimistic by 7% to 25%. 118 of 182 crossings were single-evaluation flukes (D-018).
+- Scope: this sweep only; selection results, not confirmatory evidence (D-015).
+- Implications: D is behind A by 17% to 31% on every rule and view, and its best trials use a small `lam_meet` (E-004), so there is no sign of a gain at these settings. B is ahead of A by 11% to 23% under the two smoothed rules, and by 18% held-out but only level in-sample (1.03) under first crossing, and tuning noise of this size is not yet measured, so the B-versus-A difference is not a result until the re-tuning noise floor (tag t2) says how far arm A's own score moves between two tunings (D-014, R-17). E's held-out score is unstable (1.22 to 1.88), which confirms that E needs a better tuning protocol before H5 (to be decided).
+- Found / last re-verified: 2026-10-22

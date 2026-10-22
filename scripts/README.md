@@ -2,8 +2,9 @@
 
 Written (shared logic lives in `src/sweep.py`, tested in `tests/test_sweep.py`; protocol in decisions D-014 and D-017):
 - `run_sweep.py`: random-search tuning with an equal trial budget per arm, 2 selection seeds per trial, 3,000-step runs. Resumable (finished runs are skipped, never overwritten), parallel (`--workers`), and safe against mixing protocol and non-protocol runs (a sweep with other settings needs a tag starting with `smoke`). Raw logs go to `results/raw/sweeps/<tag>/`, one file per (arm, trial, seed), plus `<arm>_trials.json` recording the sampled trials. Start with `--dry-run`.
-- `analyze.py select`: picks the best trial per arm by the D-017 rule (mean FLOPs to first reach 0.975 over the selection seeds, misses scored at full budget), writes `results/processed/sweep_<tag>_<arm>.csv`, and with `--write-configs` writes `configs/tuned/<tag>_<arm>.yaml` for the final seeds.
-- `analyze.py compare`: steps-to-target and FLOPs-to-target for groups of final runs, with bootstrap confidence intervals and a paired-bootstrap percentage difference against a reference group (the same seeds must be run for both).
+- `analyze.py select`: picks the best trial per arm by the D-017 rule (mean FLOPs to reach 0.975 over the selection seeds, misses scored at full budget), where reaching means two consecutive evaluations at or above the target (D-018, `src/crossing.py`; `--crossing first|mean3` for sensitivity only). Writes `results/processed/sweep_<tag>_<arm>_<crossing>.csv`, and with `--write-configs` writes `configs/tuned/<tag>_<arm>_<crossing>.yaml` for the final seeds. Files without the crossing suffix are from the superseded first-crossing rule.
+- `rescore_sensitivity.py`: re-scores a sweep under all three crossing rules and checks selection bias by picking on one seed and scoring on the other; writes `results/processed/sensitivity_<tag>.csv`.
+- `analyze.py compare`: steps-to-target and FLOPs-to-target for groups of final runs (same crossing rule, `--crossing`), with bootstrap confidence intervals and a paired-bootstrap percentage difference against a reference group (the same seeds must be run for both).
 - `flops_overhead.py`: per-step FLOP overhead of every arm (F-003).
 
 Typical flow:
@@ -12,8 +13,9 @@ Typical flow:
 python scripts/run_sweep.py --tag t1 --arms main --dry-run
 python scripts/run_sweep.py --tag t1 --arms main --workers 4
 python scripts/analyze.py select --tag t1 --write-configs
-for s in 0 1 2 3 4 5 6 7 8 9; do python -m src.train --config configs/tuned/t1_base.yaml --seed $s; done
-python scripts/analyze.py compare --ref A --group A='results/raw/*_final-t1-base_base_s*.jsonl' --group D='results/raw/*_final-t1-meet_meet_s*.jsonl'
+python scripts/rescore_sensitivity.py --tag t1
+for s in 0 1 2 3 4 5 6 7 8 9; do python -m src.train --config configs/tuned/t1_base_two.yaml --seed $s; done   # only after the prereg-v1 tag
+python scripts/analyze.py compare --ref A --group A='results/raw/*_final-t1-base-two_base_s*.jsonl' --group D='results/raw/*_final-t1-meet-two_meet_s*.jsonl'
 ```
 
 Still to write:
