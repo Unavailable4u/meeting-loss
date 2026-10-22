@@ -1,0 +1,24 @@
+# Selected by D-017 from sweep 't1', arm 'meet'.
+# trial t17, score 242987827200 FLOPs, reached 2/2 seeds, sweep max_steps 3000
+# Run final seeds with: python -m src.train --config <this file> --seed N
+stage: final-t1-meet
+arm: meet
+seed: 0
+act: tanh
+lr: 0.00138154
+wd: 0.000175612
+batch_size: 128
+max_steps: 3000
+eval_every: 50
+device: auto
+lr_schedule: cosine
+low_lr_mult: 1.0
+lam_meet: 0.00506617
+lam_inv: 0.105792
+warmup_steps: 200
+sigma_inv: 0.0
+eta_hat: 0.1
+lam_aux: 0.3
+aux_sched: const
+aux_gamma: 0.0
+aux_lr_decay: none
