@@ -63,7 +63,7 @@ def main():
     out = pathlib.Path(args.out_dir) / f"sensitivity_{args.tag}.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
     print(f"\nwrote {out}")

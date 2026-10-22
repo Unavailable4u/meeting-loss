@@ -75,3 +75,12 @@ Rules:
 - Scope: MNIST MLP, selection seeds 1000, 1001, 2000, 2001, 3,000-step runs.
 - Implications: the tuned baseline is stable at the selection level, which lowers the worry that arm A is a weak or lucky baseline (R-17), though the final-seed noise floor of D-014 is still to be measured. B ahead of A by about 18% (6% for its runner-up) is a lead worth testing with final seeds; it is not a result. If it holds, B is the arm that D has to beat for H2, and D (1.19 times A) has a larger gap to close.
 - Found / last re-verified: 2026-10-22
+
+## F-008: At the selection level no meeting-loss variant beats tuned arm A on FLOPs; alignment is high for D yet its best trials use a small weight, and the frozen-G variant that ties A has about zero alignment
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (selection seeds only, 25 trials per arm, 3,000 steps, 5,000-sample validation set)
+- Evidence: E-004, E-005 and E-006 under the adopted rule (D-018). Ratio of the winning score to arm A's 232.6 GFLOPs (in-sample / held-out): D 1.19 / 1.29, V1 1.44 / 1.41, V2 1.28 / 1.20, V3 0.97 / 0.91. Mean steps: A 1500, D 1450, V2 1325, V3 1300, V1 1600. Alignment of the winners after step 1000: D +0.75, V1 +0.81, V2 +0.20, V3 -0.003 (median). D: 1 of 6 trials with `lam_meet` above 0.5 reached 0.975, against 11 of 19 at 0.5 or below; D's winner has `lam_meet` 0.0051.
+- Scope: MNIST MLP, AdamW, relu or tanh, selection seeds 1000 and 1001 (A also 2000 and 2001), 3,000-step runs.
+- Implications: the expected outcome of the Stage 3 test of H1 is a null or negative result, and H1 can only be settled by the confirmatory runs. The ranking among A, B-code, F and V3 (within 4%) is inside the tuning noise (the top six trials of A span 12%). That D's alignment is high while the tuned weight is small is consistent with, but does not show, the idea that a target aligned with the true gradient adds little next to backpropagation (METHOD: an exact-gradient component only rescales the gradient); testing that is a Stage 4 question. Do not read V3's tie as a meeting effect (its alignment is zero). If H1 fails in Stage 3, the gate in GUIDE Section 6 applies.
+- Found / last re-verified: 2026-10-22

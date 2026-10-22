@@ -1,0 +1,24 @@
+# Selected by D-017/D-018 from sweep 't1', arm 'meet_noise', crossing rule 'two'.
+# trial t00, score 333866598400 FLOPs (two crossing), reached 2/2 seeds, sweep max_steps 3000
+# Run final seeds with: python -m src.train --config <this file> --seed N
+stage: final-t1-meet_noise-two
+arm: meet
+seed: 0
+act: tanh
+lr: 0.00147977
+wd: 3.01933e-05
+batch_size: 128
+max_steps: 3000
+eval_every: 50
+device: auto
+lr_schedule: cosine
+low_lr_mult: 1.0
+lam_meet: 1.66974
+lam_inv: 0.241002
+warmup_steps: 200
+sigma_inv: 0.0111608
+eta_hat: 0.1
+lam_aux: 0.3
+aux_sched: const
+aux_gamma: 0.0
+aux_lr_decay: none
