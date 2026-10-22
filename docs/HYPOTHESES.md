@@ -1,6 +1,6 @@
 # Hypotheses
 
-**Pre-registration status:** NOT LOCKED. (Edits on 2026-10-21 under DR-002 were made before the lock and are not post-hoc.) Thresholds below are *proposed*. They are finalized in D-003 after Stage 1 (when the baseline numbers are known) and locked with git tag `prereg-v1` **before** the Stage 3 main runs. Any change after the lock is labeled **post-hoc** and logged in `DRIFT_LOG.md`.
+**Pre-registration status:** NOT LOCKED. (Edits on 2026-10-21 under DR-002 and on 2026-10-22 under DR-004 were made before the lock and are not post-hoc.) Thresholds below are *proposed*. They are finalized in D-003 after Stage 1 (when the baseline numbers are known) and locked with git tag `prereg-v1` **before** the Stage 3 main runs. Any change after the lock is labeled **post-hoc** and logged in `DRIFT_LOG.md`.
 
 **Null result (applies to all):** no difference, or a loss, once the backward network's compute is counted.
 
@@ -9,7 +9,7 @@
 ## H1 (primary): the meeting loss makes training more efficient
 
 - **Statement:** Adding the meeting loss reduces the steps and FLOPs needed to reach a target validation accuracy, compared with a tuned baseline at equal total compute.
-- **Metrics:** FLOPs-to-target and steps-to-target (targets chosen so the baseline reaches them in every seed).
+- **Metrics:** FLOPs-to-target and steps-to-target (targets chosen so the baseline reaches them in every seed). A target is reached at the first of two consecutive evaluations at or above it (D-018, edited 2026-10-22 before the lock).
 - **Proposed success threshold:** mean FLOPs-to-target at least 15% lower than the tuned baseline; paired 95% bootstrap confidence interval across seeds excludes zero; holds at at least 2 different target accuracies. The gain must also exceed the re-tuning noise floor of arm A (D-014). Note: arm D costs about 23% more FLOPs per step (F-003), so it needs about a 19% step reduction just to break even.
 - **Status:** open
 - **Linked findings:** none yet

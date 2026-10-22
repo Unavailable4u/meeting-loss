@@ -1,18 +1,24 @@
-"""Analysis of sweeps and final runs (decisions D-014 and D-017). Reads results/raw/, writes
+"""Analysis of sweeps and final runs (decisions D-014, D-017 and D-018). Reads results/raw/, writes
 results/processed/. Nothing here edits a raw log.
 
-1) Pick the winner of each arm in a tuning sweep (selection rule D-017):
+"Reaching" a target means two consecutive evaluations at or above it (D-018, src/crossing.py). The
+older first-crossing rule and a 3-evaluation mean are available with --crossing for sensitivity
+checks only; outputs carry the rule in their file names.
+
+1) Pick the winner of each arm in a tuning sweep (selection rule D-017 + D-018):
      python scripts/analyze.py select --tag t1
      python scripts/analyze.py select --tag t1 --arms base meet --write-configs
-   Score = mean over the selection seeds of FLOPs to first reach 0.975 validation accuracy; a run
-   that never reaches it is scored with its full-run FLOPs. Lower is better. With --write-configs
-   the winner's config is written to configs/tuned/<tag>_<arm>.yaml, ready for the final seeds.
+   Score = mean over the selection seeds of FLOPs to reach 0.975 validation accuracy; a run that
+   never reaches it is scored with its full-run FLOPs. Lower is better. Writes
+   results/processed/sweep_<tag>_<arm>_<crossing>.csv; with --write-configs the winner's config goes
+   to configs/tuned/<tag>_<arm>_<crossing>.yaml, ready for the final seeds. (Files without the
+   crossing suffix are from the pre-D-018 first-crossing rule and are superseded.)
 
 2) Compare final runs (steps and FLOPs to target, bootstrap CIs, paired difference vs a reference).
    Quote the globs so the shell does not expand them:
      python scripts/analyze.py compare --ref A \\
-         --group A='results/raw/*_final-t1-base_base_s*.jsonl' \\
-         --group D='results/raw/*_final-t1-meet_meet_s*.jsonl'
+         --group A='results/raw/*_final-t1-base-two_base_s*.jsonl' \\
+         --group D='results/raw/*_final-t1-meet-two_meet_s*.jsonl'
    Runs that never reach a target are scored with their full-run FLOPs and counted in `n_never`
    (the mean is then a lower bound on the true mean, so a gain is not overstated). The paired
    difference resamples seeds jointly, so reference and group must be run on the same seeds.
@@ -27,6 +33,7 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from anywhere
 
+from src.crossing import CROSSINGS, DEFAULT_CROSSING
 from src.sweep import (SELECTION_TARGET, SWEEP_ROOT, bootstrap_ci, collect_sweep, group_scores,
                        paired_pct_change, select_best, tuned_config)
 
@@ -43,7 +50,8 @@ def _write_csv(path, rows):
 
 
 def cmd_select(args):
-    data = collect_sweep(args.tag, args.arms, args.root, args.target)
+    data = collect_sweep(args.tag, args.arms, args.root, args.target, args.crossing)
+    print(f"crossing rule: {args.crossing} (target {args.target})")
     counts = {a: len(d["trials"]) for a, d in data.items()}
     if len(set(counts.values())) > 1 or any(d["incomplete"] for d in data.values()):
         print("WARNING: arms do not all have the same number of complete trials; the equal-budget "
@@ -66,7 +74,7 @@ def cmd_select(args):
                 row[f"s{s}_flops"] = ps["flops"]
                 row[f"s{s}_final_val"] = ps["final_val"]
             rows.append(row)
-        _write_csv(pathlib.Path(args.out_dir) / f"sweep_{args.tag}_{arm}.csv", rows)
+        _write_csv(pathlib.Path(args.out_dir) / f"sweep_{args.tag}_{arm}_{args.crossing}.csv", rows)
         best = select_best(trials)
         n_ok = sum(t["n_reached"] > 0 for t in trials)
         print(f"{arm}: {len(trials)} trials, {n_ok} reached {args.target} in at least one seed")
@@ -77,15 +85,15 @@ def cmd_select(args):
             print(f"  NOTE: the winner did not reach {args.target} in every seed (a missed seed is scored as "
                   f"the full budget); check the CSV before trusting this arm's tuning.")
         if args.write_configs:
-            note = (f"trial t{best['trial']:02d}, score {best['score']:.0f} FLOPs, "
+            note = (f"trial t{best['trial']:02d}, score {best['score']:.0f} FLOPs ({args.crossing} crossing), "
                     f"reached {best['n_reached']}/{best['n_seeds']} seeds, sweep max_steps "
                     f"{best['cfg']['max_steps']}")
-            out = pathlib.Path("configs/tuned") / f"{args.tag}_{arm}.yaml"
+            out = pathlib.Path("configs/tuned") / f"{args.tag}_{arm}_{args.crossing}.yaml"
             out.parent.mkdir(parents=True, exist_ok=True)
             if out.exists():
                 print(f"  {out} exists; not overwritten")
             else:
-                out.write_text(tuned_config(best["cfg"], args.tag, arm, note))
+                out.write_text(tuned_config(best["cfg"], args.tag, arm, note, args.crossing))
                 print(f"  wrote {out}")
 
 
@@ -96,7 +104,7 @@ def cmd_compare(args):
         paths = sorted(glob.glob(pattern))
         if not paths:
             sys.exit(f"group {name!r}: no files match {pattern!r}")
-        groups[name] = group_scores(paths, args.targets)
+        groups[name] = group_scores(paths, args.targets, args.crossing)
     if args.ref not in groups:
         sys.exit(f"--ref {args.ref!r} is not one of the groups {sorted(groups)}")
 
@@ -108,7 +116,7 @@ def cmd_compare(args):
             flops = np.array([g[s][target]["score"] for s in seeds])
             steps_reached = [g[s][target]["steps"] for s in seeds if g[s][target]["reached"]]
             lo, hi = bootstrap_ci(flops, args.n_boot, seed=args.seed)
-            row = dict(target=target, group=name, n=len(seeds), n_never=sum(not g[s][target]["reached"] for s in seeds),
+            row = dict(crossing=args.crossing, target=target, group=name, n=len(seeds), n_never=sum(not g[s][target]["reached"] for s in seeds),
                        mean_gflops=flops.mean() / 1e9, ci_lo=lo / 1e9, ci_hi=hi / 1e9,
                        median_gflops=float(np.median(flops)) / 1e9,
                        mean_steps_reached=float(np.mean(steps_reached)) if steps_reached else None)
@@ -123,6 +131,7 @@ def cmd_compare(args):
                     row.update(n_paired=len(common))
             rows.append(row)
 
+    print(f"crossing rule: {args.crossing}")
     print(f"{'target':>7} {'group':>10} {'n':>3} {'never':>5} {'mean GFLOPs [95% CI]':>28} "
           f"{'median':>8} {'steps':>7} {'vs ' + args.ref + ' (paired %, 95% CI)':>30}")
     for r in rows:
@@ -140,19 +149,23 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("select", help="pick the best trial per arm from a sweep (D-017)")
+    s = sub.add_parser("select", help="pick the best trial per arm from a sweep (D-017, D-018)")
     s.add_argument("--tag", required=True)
     s.add_argument("--arms", nargs="+", default=None, help="default: every arm found in the sweep")
     s.add_argument("--target", type=float, default=SELECTION_TARGET)
+    s.add_argument("--crossing", choices=CROSSINGS, default=DEFAULT_CROSSING,
+                   help="what counts as reaching the target (default per D-018; others for sensitivity only)")
     s.add_argument("--root", default=str(SWEEP_ROOT))
     s.add_argument("--out-dir", default="results/processed")
-    s.add_argument("--write-configs", action="store_true", help="write configs/tuned/<tag>_<arm>.yaml")
+    s.add_argument("--write-configs", action="store_true", help="write configs/tuned/<tag>_<arm>_<crossing>.yaml")
     s.set_defaults(func=cmd_select)
 
     c = sub.add_parser("compare", help="steps/FLOPs-to-target with bootstrap CIs across groups of final runs")
     c.add_argument("--group", action="append", required=True, metavar="NAME=GLOB")
     c.add_argument("--ref", required=True, help="group that the others are compared against")
     c.add_argument("--targets", nargs="+", type=float, default=[0.97, 0.975, 0.98])
+    c.add_argument("--crossing", choices=CROSSINGS, default=DEFAULT_CROSSING,
+                   help="what counts as reaching a target (default per D-018)")
     c.add_argument("--n-boot", type=int, default=10000)
     c.add_argument("--seed", type=int, default=0, help="bootstrap seed")
     c.add_argument("--out", default=None, help="also write the table as CSV")

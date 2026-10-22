@@ -1,25 +1,25 @@
 # Plan
 
-**Last updated:** 2026-10-22 (sweep and analysis scripts, D-017, DR-003; E-002 and E-003 logged)
+**Last updated:** 2026-10-22 (first tuning pass E-004; crossing rule D-018, DR-004; F-005, F-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 1 (baseline tuning) with Stage 2 code ready (method v1.1)
 
 ## Current focus
 
-Tune arm A under the D-014 protocol, measure the re-tuning noise floor, and finalize the D-003 targets, while running short exploratory diagnostic runs of the meeting-loss arms.
+The first tuning pass of arms A to F is done (E-004). Measure the re-tuning noise floor of arm A, sweep the pre-listed variants, finalize D-003, and lock `prereg-v1` before any Stage 3 run.
 
 ## Next three actions
 
-1. Apply the sweep patch (`git am`), run `pytest` (46 tests expected to pass), and run the first tuning pass for arms A to F on a lab machine or GPU, in parallel: `python scripts/run_sweep.py --tag t1 --arms main --workers N`; then `python scripts/analyze.py select --tag t1 --write-configs`. All arms must finish the same 25 trials (D-017).
-2. Re-tuning noise floor: `python scripts/run_sweep.py --tag t2 --arms base --seeds 2000 2001 --workers N`; run the 10 final seeds for both tuned arm A configs and compare them with `scripts/analyze.py compare`; then finalize and record D-003 (targets 0.97 and 0.975; 0.98 secondary) and decide whether to enlarge the validation split (F-002).
-3. Before the `prereg-v1` lock, settle the provisional items of D-017 (final-run horizon, the "small" `aux_gamma`, control F's `eta_hat`, whether the first-crossing score needs smoothing, R-18), then sweep the pre-listed variants (V1 `meet_noise`, V2 `meet_ao`, V3 `meet_frozen`, B-code `deepsup_code`) with the same budget.
+1. Finish the pending sweeps: the re-tuning noise floor (`python scripts/run_sweep.py --tag t2 --arms base --seeds 2000 2001 --workers 4`) and the variant sweeps under tag t1 (`--arms meet_noise meet_ao meet_frozen deepsup_code`). Log them as E-005 and E-006 (Type `exploratory`), then `python scripts/analyze.py select --tag t2 --write-configs` and `python scripts/rescore_sensitivity.py --tag t2`. The size of the shift between the two tunings of arm A (t1 winner t09 versus the t2 winner) decides whether B versus A (F-006) means anything.
+2. Before the lock, record D-003 (targets 0.97 and 0.975, 0.98 secondary, the D-018 crossing rule, the H1 to H3 thresholds), and decide: enlarging the validation split (F-002, R-16); how to tune control E (its t1 result is unstable, F-006); whether F is rescaled before H4 (R-19).
+3. Create the git tag `prereg-v1`, then start Stage 3: 10 final seeds (0 to 9) for every tuned config in `configs/tuned/*_two.yaml` (and for both tunings of arm A), compare with `python scripts/analyze.py compare`. Do not run final seeds before the tag.
 
 ## Stage table
 
 | Stage | Name | Target weeks | Status | Exit criteria (short) |
 |---|---|---|---|---|
 | 0 | Project setup and documents | 1 | **Done** (2026-10-21) | All living docs exist; decisions recorded; repo pushed |
-| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 and E-002 done; tuning scripts ready, tuning pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
+| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001, E-002 and E-004 done; noise floor, variants, D-003 and the lock pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
 | 2 | Implement the meeting loss and test it | 1 to 2 | **Code ready** (method v1.1, 46 tests pass); diagnostic runs done (E-003, exploratory: no collapse) | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
 | 3 | Main comparison (arms A to D) | 2 to 3 | Not started | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
 | 4 | Diagnostics and ablations | 3 to 4 | Not started | Components that matter identified; H3 evaluated |
@@ -58,3 +58,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
 | 2026-10-21 | Repo created. Three guides added under `docs/`. D-001 to D-011 and DR-001 recorded. |
 | 2026-10-21 | Stage 1 untuned baseline logged (E-001, 5 seeds). v1.1 patch: D-012 to D-016, DR-002, F-001 to F-003, method v1.1 (arms E, F, variants V1 to V3), 17 tests. |
 | 2026-10-22 | v1.1 code reproduces E-001 exactly (E-002, verification). Short diagnostics of meet, meet_ao and meet_frozen (E-003, exploratory, F-004): no collapse, no gain at equal steps. Sweep selection rule agreed (D-017, DR-003); `scripts/run_sweep.py`, `scripts/analyze.py`, `src/sweep.py` and `tests/test_sweep.py` written (46 tests); R-18 added. No tuning sweep has been run yet. |
+| 2026-10-22 | First tuning pass t1 for arms A to F (E-004, 300 runs, exploratory). Under the adopted crossing rule (D-018, DR-004) winners in GFLOPs to 0.975: A 232.6, B 191.2, F 229.7, D 276.3, E 275.2, C 418.0; D is behind A on every rule (F-006). Control F measured as nearly inert (F-005, R-19). `src/crossing.py`, `scripts/rescore_sensitivity.py`, 55 tests. |
