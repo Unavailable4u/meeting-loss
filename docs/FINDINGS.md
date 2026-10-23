@@ -84,3 +84,30 @@ Rules:
 - Scope: MNIST MLP, AdamW, relu or tanh, selection seeds 1000 and 1001 (A also 2000 and 2001), 3,000-step runs.
 - Implications: the expected outcome of the Stage 3 test of H1 is a null or negative result, and H1 can only be settled by the confirmatory runs. The ranking among A, B-code, F and V3 (within 4%) is inside the tuning noise (the top six trials of A span 12%). That D's alignment is high while the tuned weight is small is consistent with, but does not show, the idea that a target aligned with the true gradient adds little next to backpropagation (METHOD: an exact-gradient component only rescales the gradient); testing that is a Stage 4 question. Do not read V3's tie as a meeting effect (its alignment is zero). If H1 fails in Stage 3, the gate in GUIDE Section 6 applies.
 - Found / last re-verified: 2026-10-22
+
+## F-009: The meeting loss (arm D) needs about 36% more FLOPs than tuned arm A to reach 97.0% and 97.5% validation accuracy; H1 is refuted, while gradient alignment is high (H3)
+- Type: confirmatory
+- Status: supported (as a null result: the pre-registered outcome of H1 is "refuted")
+- Confidence: high within its scope (20 paired seeds, two targets, intervals far from both zero and a 15% gain)
+- Evidence: E-008. D against A: +36.9% [+26.4, +47.4] at 0.97 and +35.5% [+26.9, +44.4] at 0.975 (97.5% paired bootstrap intervals), mean steps 1025 and 1510 against 920 and 1370. Against the second tuning of A: +2.2% [-4.7, +9.9] and +15.6% [+9.5, +22.5]. Alignment of D with the task gradient: +0.75 to +0.79 in every run, positive at 100% of evaluations (H3 threshold met).
+- Scope: MNIST, 784-256-128-256-10 MLP split at the 128-d middle layer, AdamW, 25-trial random-search tuning per arm (D-014, D-017, D-018), 3,000 steps, 55,000 / 5,000 split, one tuned configuration per arm.
+- Implications: the paper's main result is a null (negative) result on this setting; H2 and H5 are not tested (gated). That alignment is high while the gain is absent supports the view that a target aligned with the true gradient adds little next to backpropagation, but this is an interpretation, not a tested mechanism; testing it is a Stage 4 question. The Stage 3 gate row "no gain or worse" applies (GUIDE Section 6). It does not say anything about SGD, other tasks or other layers (H4 is untested), and control F (negative control) cannot address the exact-gradient question (F-005).
+- Found / last re-verified: 2026-10-23
+
+## F-010: Deep supervision (arm B) does not beat tuned arm A at the primary targets; the selection-level lead of 18% did not replicate (H6 refuted)
+- Type: confirmatory (the hypothesis was generated from the exploratory finding F-007 and pre-registered in D-019 before any final seed)
+- Status: supported (as a null result: the pre-registered outcome of H6 is "refuted")
+- Confidence: medium to high for the comparison with A; the comparison with A2 gives another answer, see F-011
+- Evidence: E-008. B against A: +2.3% [-4.8, +10.4] at 0.97 and +1.7% [-5.0, +9.2] at 0.975. Exploratory: against A2, -23.7% [-27.8, -19.1] and -13.2% [-18.7, -7.2]; at 0.98 against A -19.2% [-28.0, -9.0] and against A2 -14.1% [-21.7, -6.9], with B missing 0.98 in 1 of 20 seeds against 8 for A and 3 for A2.
+- Scope: as F-009.
+- Implications: the pre-registered conclusion is that B is not more efficient than A at 0.97 or 0.975. B being ahead of A2 and, at 0.98, ahead of both is a lead for a later confirmatory run (planned in advance on fresh seeds, D-015), not a claim. Selection on 2 seeds overstated B's advantage (191.2 at selection, 216.1 on 20 seeds).
+- Found / last re-verified: 2026-10-23
+
+## F-011: Two tunings of arm A tie at selection but differ by 17% to 34% on the final seeds; selection-level differences from 2 seeds are not reliable at this size
+- Type: exploratory
+- Status: tentative
+- Confidence: medium (one pair of tunings, 20 seeds each)
+- Evidence: E-008. A2 against A: +34.0% [+26.5, +42.0] at 0.97, +17.2% [+6.7, +27.7] at 0.975, -6.0% [-13.8, +2.1] at 0.98. Mean GFLOPs to 0.975, selection to final: A 232.6 to 212.4, A2 232.6 to 248.9, B 191.2 to 216.1, D 276.3 to 287.8. The across-seed SD of log steps-to-0.975 on the final runs is only 0.08 to 0.12.
+- Scope: MNIST MLP, arm A, 25 trials per tuning, 2 selection seeds, target 0.975.
+- Implications: the dominant noise is in the tuned configuration (2-seed selection among 25 trials, with the minimum of a noisy score chosen), not in the training seed; F-007's 0.0% re-tuning shift was a selection-level tie that did not carry over. The D-019 rule uses the shift only to block a "supported" verdict, so it did not matter for the two "refuted" verdicts. H1 holds against either tuning of A; H6 does not (F-010). Any future comparison should pre-register which baseline is the reference, and either select with more seeds or re-evaluate the top few trials on fresh seeds before choosing. Statements about arms must say they are conditional on the tuned configurations (R-21).
+- Found / last re-verified: 2026-10-23
