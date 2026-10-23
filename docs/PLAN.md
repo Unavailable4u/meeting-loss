@@ -6,20 +6,20 @@
 
 ## Current focus
 
-The first tuning pass of arms A to F is done (E-004). Measure the re-tuning noise floor of arm A, sweep the pre-listed variants, finalize D-003, and lock `prereg-v1` before any Stage 3 run.
+All tuning passes are done (E-004 to E-006). D-019 (final D-003, DR-005) fixes the Stage 3 protocol and pre-registration (E-007 for the power). Next: commit the lock, tag `prereg-v1`, then run Stage 3 with `scripts/run_final.py` (150 runs).
 
 ## Next three actions
 
-1. Before the lock, record D-003 (targets 0.97 and 0.975, 0.98 secondary, the D-018 crossing rule, the H1 to H3 thresholds, the list of arms for Stage 3) and decide: enlarging the validation split (F-002, R-16); how to tune control E (its t1 result is unstable, F-006); whether F is rescaled before H4 (R-19). The tuning passes are done (E-004 to E-006; F-007, F-008).
-2. Create the git tag `prereg-v1`. Do not run final seeds before the tag.
-3. Stage 3: 10 final seeds (0 to 9) for every tuned config in `configs/tuned/*_two.yaml` (both tunings of arm A, `t1_base_two` and `t2_base_two`, B, B-code, C, D, E, F, V1, V2, V3; about 110 runs of 3,000 steps), then `python scripts/analyze.py compare`. If H1 fails, apply the Stage 3 gate in `docs/GUIDE.md` Section 6.
+1. Commit the lock (D-019, DR-005, `configs/stage3_plan.yaml`, `src/final.py`, `scripts/run_final.py`) and create the git tag `prereg-v1` on that commit, then push the commit and the tag. Do not run final seeds before the tag; `run_final.py` refuses to start without it.
+2. Stage 3: `python scripts/run_final.py --workers 4` (150 runs of 3,000 steps: seeds 0 to 19 for A, D, B and A2; seeds 0 to 9 for C, E, B-code, F, V1, V2, V3; about 2.7 hours; resumes if interrupted). Then the compare command of `scripts/README.md` with `--alpha 0.025 --margin 15 --primary-targets 0.97 0.975 --shift-group A2` decides H1 and H6.
+3. If H1 is supported: test H2, and run the E refinement (`low_lr_mult` sweep on arm A) before H5 (D-019 point 7). If H1 is refuted or inconclusive: H2 and H5 are not tested; apply the Stage 3 gate in `docs/GUIDE.md` Section 6 (no seeds are added to the same test, D-019 point 2). Control F's rescaling is decided at Stage 5 (R-19).
 
 ## Stage table
 
 | Stage | Name | Target weeks | Status | Exit criteria (short) |
 |---|---|---|---|---|
 | 0 | Project setup and documents | 1 | **Done** (2026-10-21) | All living docs exist; decisions recorded; repo pushed |
-| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 to E-006 done: all tuning passes complete; D-003 and the lock pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
+| 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 to E-006 done: all tuning passes complete; D-019 written, the lock tag pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
 | 2 | Implement the meeting loss and test it | 1 to 2 | **Code ready** (method v1.1, 46 tests pass); diagnostic runs done (E-003, exploratory: no collapse) | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
 | 3 | Main comparison (arms A to D) | 2 to 3 | Not started | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
 | 4 | Diagnostics and ablations | 3 to 4 | Not started | Components that matter identified; H3 evaluated |
@@ -61,3 +61,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
 | 2026-10-22 | First tuning pass t1 for arms A to F (E-004, 300 runs, exploratory). Under the adopted crossing rule (D-018, DR-004) winners in GFLOPs to 0.975: A 232.6, B 191.2, F 229.7, D 276.3, E 275.2, C 418.0; D is behind A on every rule (F-006). Control F measured as nearly inert (F-005, R-19). `src/crossing.py`, `scripts/rescore_sensitivity.py`, 55 tests. |
 | 2026-10-22 | Re-tuning pass t2 for arm A (E-005, exploratory): same winning score as t1 under the adopted rule (232.6 GFLOPs, 0.0% shift) with very different hyperparameters (F-007); B's t1 winner is 18% below both. Variant sweeps (200 runs) finished; analysis pending. |
 | 2026-10-22 | Variant sweeps analyzed (E-006, exploratory, F-008): no meeting-loss variant beats tuned A on FLOPs beyond noise; V3 ties A with about zero alignment; B-paper is ahead of B-code. All tuning passes complete; D-003 and the `prereg-v1` lock are next. |
+| 2026-10-23 | D-019 written (final D-003, DR-005): targets, seeds (20 for A, D, B, A2; 10 for the rest), three-way outcome rule with 97.5% intervals for H1 and new H6, H2 and H5 gated on H1, E refinement pre-registered, F a negative control. Lock-guarded runner `scripts/run_final.py` and `configs/stage3_plan.yaml` added. Noise and power: E-007. |

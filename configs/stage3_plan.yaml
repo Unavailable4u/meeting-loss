@@ -1,0 +1,19 @@
+# Stage 3 plan, locked with the git tag prereg-v1 (decision D-019). Read by scripts/run_final.py.
+# Every group is one tuned configuration (selected in the t1 / t2 tuning passes under D-017 and D-018)
+# run on fresh seeds. Seeds 0 to 99 are reserved for final runs; selection used seeds 1000+ and 2000+.
+# Roles: "primary" decides H1; "secondary" decides H6 (generated from F-007); "gated" is tested only if
+# H1 is supported (H2, H5); everything else is "descriptive" (reported, never used to decide a claim).
+# Do not edit after the lock; a change is post-hoc and needs a drift entry.
+horizon_steps: 3000
+groups:
+  - {name: A,     config: configs/tuned/t1_base_two.yaml,       seeds: "0-19", role: primary,     note: "arm A, t1 tuning: reference of H1 and H6"}
+  - {name: D,     config: configs/tuned/t1_meet_two.yaml,       seeds: "0-19", role: primary,     note: "arm D, meeting loss: H1"}
+  - {name: B,     config: configs/tuned/t1_deepsup_two.yaml,    seeds: "0-19", role: secondary,   note: "arm B-paper, deep supervision: H6, and H2 reference"}
+  - {name: A2,    config: configs/tuned/t2_base_two.yaml,       seeds: "0-19", role: descriptive, note: "arm A, second tuning: re-tuning shift (D-014), must be exceeded by an H1 gain"}
+  - {name: C,     config: configs/tuned/t1_ae_two.yaml,         seeds: "0-9",  role: gated,       note: "arm C, autoencoder auxiliary: H2"}
+  - {name: E,     config: configs/tuned/t1_base_lowlr_two.yaml, seeds: "0-9",  role: gated,       note: "control E, lower-layer learning-rate multiplier: H5 (refinement pre-registered in D-019)"}
+  - {name: Bcode, config: configs/tuned/t1_deepsup_code_two.yaml, seeds: "0-9", role: descriptive, note: "arm B-code (DSN reference-code variant)"}
+  - {name: F,     config: configs/tuned/t1_meet_grad_two.yaml,  seeds: "0-9",  role: descriptive, note: "control F, negative control (F-005)"}
+  - {name: V1,    config: configs/tuned/t1_meet_noise_two.yaml, seeds: "0-9",  role: descriptive, note: "variant V1, noise in the inverse loss"}
+  - {name: V2,    config: configs/tuned/t1_meet_ao_two.yaml,    seeds: "0-9",  role: descriptive, note: "variant V2, augmented output"}
+  - {name: V3,    config: configs/tuned/t1_meet_frozen_two.yaml, seeds: "0-9", role: descriptive, note: "variant V3, frozen random G"}
