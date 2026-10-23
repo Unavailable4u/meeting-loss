@@ -55,7 +55,7 @@
 
 ### Suggested success thresholds (decide and record these in D-003 before the main runs)
 
-- H1 counts as **supported** if the mean FLOPs-to-target is at least 15% lower than the tuned baseline, the paired 95% bootstrap confidence interval across seeds excludes zero, and the result holds on at least 2 different target accuracies.
+- H1 has a pre-registered **three-way outcome** (D-019, v1.3): *supported* if the mean FLOPs-to-target is at least 15% lower than the tuned baseline and the paired 97.5% bootstrap interval across seeds excludes zero, at both 0.97 and 0.975, and the gain exceeds the re-tuning shift of arm A; *refuted* if the interval excludes a gain of 15% or more at both targets; *inconclusive* otherwise. H6 (deep supervision against the baseline, generated from F-007) uses the same rule. The older single-threshold wording above is the v1.0 suggestion.
 - H2 counts as **supported** if arm D beats arms B and C under the same criterion.
 - H3 counts as **supported** if the median alignment is positive in at least 90% of evaluation points after warm-up.
 
@@ -350,7 +350,7 @@ Paper claims (`paper/CLAIMS.md`) may only rest on `confirmatory` or `verificatio
 - **Equal tuning budget.** Every arm gets the same number of tuning trials. Current protocol (v1.2, D-014, supersedes the earlier 20-trial suggestion): 25 random trials per arm, drawing learning rate log-uniformly in [1e-4, 1e-2], weight decay in [1e-6, 1e-2], activation in {relu, tanh}, learning-rate schedule in {constant, cosine}, plus each arm's own loss weights (see D-014 for ranges). Use 2 seeds per trial for selection, then 10 fresh seeds for final results. Also run the **re-tuning noise floor**: tune arm A a second time with fully independent seeds, and require any gain to exceed the shift between the two tunings.
 - **Equal compute.** Compare at equal FLOPs, counting the backward network and any auxiliary heads. Report wall-clock time separately.
 - **Selection on validation only.**
-- **Seeds.** At least 5 for early comparisons, and at least 10 for headline results (MNIST is cheap enough).
+- **Seeds.** At least 5 for early comparisons, and at least 10 for headline results (MNIST is cheap enough). Stage 3 (D-019): 20 seeds (0 to 19) for the groups that decide H1 and H6, 10 for the others; no seeds are added to a test after its results are seen.
 - **Statistics.** Report the median and spread of steps-to-target and FLOPs-to-target. Use paired bootstrap confidence intervals across seeds.
 - **Targets.** Choose target accuracies that the baseline reaches in *every* seed (for example 97.0%, 97.5%, 98.0% validation accuracy for an MNIST MLP), so the metric is always defined. Record the choice in D-003.
 
@@ -442,7 +442,7 @@ Timelines are rough and assume part-time work. Adjust them, and write the real d
 | Outcome | Action |
 |---|---|
 | Thresholds met for H1 and H2 | Proceed to Stage 4 |
-| Some gain, but confidence interval crosses zero | Add seeds; check warm-up and `λ` ranges; at most 3 pre-listed variants (log all); re-evaluate |
+| Some gain, but the outcome is *inconclusive* (D-019) | Do not add seeds to the same test. Report the interval. A new test on fresh seeds (20 to 99) is a separate, planned and logged experiment; check warm-up and `λ` ranges; at most 3 pre-listed variants (log all) |
 | Gain matched by arm B or C (H2 fails) | The backward target is not special. Record it. Options: analyze why, test a variant that makes the backward path matter more, or reframe the paper around the finding |
 | No gain or worse | Use the alignment diagnostic to explain it. Options: a variant design, switch to another idea from the idea bank in `brain-vs-model-learning-comparison.md`, or write a negative-result paper or workshop submission. Record the choice in DECISIONS |
 
@@ -958,3 +958,4 @@ Titles, years, and venues below are from memory and may contain small errors. Ve
 | 1.0 | 2026-10-21 | Initial guide | none |
 | 1.1 | 2026-10-21 | Repo created. Layout gains `CLAUDE.md`, `docs/DOCUMENT_MAP.md`, `docs/reference/`. Starter code placed in `src/` and `tests/`. Method now maintained in `docs/METHOD.md` (Section 2 is the v1.0 snapshot). | D-009, D-010, D-011, DR-001 |
 | 1.2 | 2026-10-21 | Reading sprint folded in: contribution reframed, arms E and F, variants, 25-trial protocol with schedules and noise floor, exploratory versus confirmatory rule, `docs/notes/`. See `docs/METHOD.md` v1.1. | D-012 to D-016, DR-002 |
+| 1.3 | 2026-10-23 | Stage 3 pre-registration finalized: three-way outcome rule with 97.5% intervals, 20 or 10 seeds per group, H6 added, H2 and H5 gated, lock-guarded runner. Sections 4 and 5 and the Stage 3 gate updated. | D-019, DR-005 |

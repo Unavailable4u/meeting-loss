@@ -35,7 +35,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from
 
 from src.crossing import CROSSINGS, DEFAULT_CROSSING
 from src.sweep import (SELECTION_TARGET, SWEEP_ROOT, bootstrap_ci, collect_sweep, group_scores,
-                       paired_pct_change, select_best, tuned_config)
+                       margin_verdict, overall_verdict, paired_pct_change, select_best, tuned_config)
 
 
 def _write_csv(path, rows):
@@ -107,6 +107,11 @@ def cmd_compare(args):
         groups[name] = group_scores(paths, args.targets, args.crossing)
     if args.ref not in groups:
         sys.exit(f"--ref {args.ref!r} is not one of the groups {sorted(groups)}")
+    if args.shift_group and args.shift_group not in groups:
+        sys.exit(f"--shift-group {args.shift_group!r} is not one of the groups {sorted(groups)}")
+    primary = args.primary_targets or args.targets
+    if not set(primary) <= set(args.targets):
+        sys.exit("--primary-targets must be among --targets")
 
     rows = []
     for target in args.targets:
@@ -115,7 +120,7 @@ def cmd_compare(args):
             seeds = sorted(g)
             flops = np.array([g[s][target]["score"] for s in seeds])
             steps_reached = [g[s][target]["steps"] for s in seeds if g[s][target]["reached"]]
-            lo, hi = bootstrap_ci(flops, args.n_boot, seed=args.seed)
+            lo, hi = bootstrap_ci(flops, args.n_boot, alpha=args.alpha, seed=args.seed)
             row = dict(crossing=args.crossing, target=target, group=name, n=len(seeds), n_never=sum(not g[s][target]["reached"] for s in seeds),
                        mean_gflops=flops.mean() / 1e9, ci_lo=lo / 1e9, ci_hi=hi / 1e9,
                        median_gflops=float(np.median(flops)) / 1e9,
@@ -125,22 +130,42 @@ def cmd_compare(args):
                 if len(common) >= 2:
                     r = np.array([ref[s][target]["score"] for s in common])
                     x = np.array([g[s][target]["score"] for s in common])
-                    p, plo, phi = paired_pct_change(r, x, args.n_boot, seed=args.seed)
+                    p, plo, phi = paired_pct_change(r, x, args.n_boot, alpha=args.alpha, seed=args.seed)
                     row.update(n_paired=len(common), pct_change_vs_ref=p, pct_lo=plo, pct_hi=phi)
                 else:
                     row.update(n_paired=len(common))
             rows.append(row)
 
+    if args.margin is not None:
+        shifts = {r["target"]: r.get("pct_change_vs_ref") for r in rows if r["group"] == args.shift_group}
+        for r in rows:
+            if r["group"] in (args.ref, args.shift_group) or r.get("pct_change_vs_ref") is None:
+                continue
+            shift = shifts.get(r["target"]) if args.shift_group and r["group"] != args.shift_group else None
+            r["verdict"] = margin_verdict(r["pct_change_vs_ref"], r["pct_lo"], r["pct_hi"], args.margin, shift)
+
+    ci_pct = f"{100 * (1 - args.alpha):g}"
     print(f"crossing rule: {args.crossing}")
-    print(f"{'target':>7} {'group':>10} {'n':>3} {'never':>5} {'mean GFLOPs [95% CI]':>28} "
-          f"{'median':>8} {'steps':>7} {'vs ' + args.ref + ' (paired %, 95% CI)':>30}")
+    print(f"{'target':>7} {'group':>10} {'n':>3} {'never':>5} {'mean GFLOPs [' + ci_pct + '% CI]':>28} "
+          f"{'median':>8} {'steps':>7} {'vs ' + args.ref + ' (paired %, ' + ci_pct + '% CI)':>34} {'verdict':>13}")
     for r in rows:
         ci = f"{r['mean_gflops']:.1f} [{r['ci_lo']:.1f}, {r['ci_hi']:.1f}]"
         steps = f"{r['mean_steps_reached']:.0f}" if r["mean_steps_reached"] is not None else "-"
         d = (f"{r['pct_change_vs_ref']:+.1f} [{r['pct_lo']:+.1f}, {r['pct_hi']:+.1f}]"
              if r.get("pct_change_vs_ref") is not None else ("(reference)" if r["group"] == args.ref else "n/a"))
         print(f"{r['target']:>7} {r['group']:>10} {r['n']:>3} {r['n_never']:>5} {ci:>28} "
-              f"{r['median_gflops']:>8.1f} {steps:>7} {d:>30}")
+              f"{r['median_gflops']:>8.1f} {steps:>7} {d:>34} {r.get('verdict', ''):>13}")
+    if args.margin is not None:
+        print(f"\nthree-way outcome (D-019): margin {args.margin:g}%, {ci_pct}% CI, primary targets {primary}")
+        for name in groups:
+            if name == args.ref or name == args.shift_group:
+                continue
+            vs = [r.get("verdict", "n/a") for r in rows if r["group"] == name and r["target"] in primary]
+            o = overall_verdict(vs)
+            for r in rows:
+                if r["group"] == name:
+                    r["overall_verdict"] = o
+            print(f"  {name}: {o}   (per target: {', '.join(vs)})")
     if args.out:
         _write_csv(args.out, rows)
 
@@ -167,6 +192,15 @@ def main():
     c.add_argument("--crossing", choices=CROSSINGS, default=DEFAULT_CROSSING,
                    help="what counts as reaching a target (default per D-018)")
     c.add_argument("--n-boot", type=int, default=10000)
+    c.add_argument("--alpha", type=float, default=0.05,
+                   help="two-sided CI level is 1 - alpha (D-019 uses 0.025 for H1 and H6)")
+    c.add_argument("--margin", type=float, default=None,
+                   help="percent; adds the three-way outcome of D-019 per target (supported / refuted / inconclusive)")
+    c.add_argument("--primary-targets", nargs="+", type=float, default=None,
+                   help="targets that must agree for the overall outcome (default: all --targets)")
+    c.add_argument("--shift-group", default=None,
+                   help="group holding a second, independent tuning of the reference; a gain must exceed the "
+                        "reference-vs-this-group shift to count as supported (D-019)")
     c.add_argument("--seed", type=int, default=0, help="bootstrap seed")
     c.add_argument("--out", default=None, help="also write the table as CSV")
     c.set_defaults(func=cmd_compare)

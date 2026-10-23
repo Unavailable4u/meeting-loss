@@ -361,3 +361,31 @@ def cross_seed_check(trials, seeds):
         best = min(trials, key=lambda t: (t["per_seed"][a]["score"], t["trial"]))
         out.append((best["trial"], best["per_seed"][b]["score"]))
     return float(np.mean([s for _, s in out])), out
+
+
+# --- pre-registered three-way outcome (D-019) ----------------------------------------------------
+def margin_verdict(point, lo, hi, margin=15.0, shift=None):
+    """Three-way outcome for one target. `point`, `lo`, `hi` are the paired percentage change of mean
+    FLOPs-to-target against the reference and its confidence interval (negative = fewer FLOPs).
+      supported     point change <= -margin and the interval excludes zero (hi < 0); if `shift` (the
+                    percentage change between two independent tunings of the reference) is given, the
+                    gain must also exceed it in size, otherwise the outcome is inconclusive
+      refuted       the interval excludes every gain of `margin` percent or more (lo > -margin)
+      inconclusive  anything else"""
+    if point <= -margin and hi < 0:
+        if shift is not None and abs(point) <= abs(shift):
+            return "inconclusive"
+        return "supported"
+    if lo > -margin:
+        return "refuted"
+    return "inconclusive"
+
+
+def overall_verdict(verdicts):
+    """Outcome over the primary targets: supported or refuted only if every target agrees."""
+    verdicts = list(verdicts)
+    if verdicts and all(v == "supported" for v in verdicts):
+        return "supported"
+    if verdicts and all(v == "refuted" for v in verdicts):
+        return "refuted"
+    return "inconclusive"

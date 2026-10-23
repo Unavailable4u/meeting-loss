@@ -4,7 +4,9 @@ Written (shared logic lives in `src/sweep.py`, tested in `tests/test_sweep.py`; 
 - `run_sweep.py`: random-search tuning with an equal trial budget per arm, 2 selection seeds per trial, 3,000-step runs. Resumable (finished runs are skipped, never overwritten), parallel (`--workers`), and safe against mixing protocol and non-protocol runs (a sweep with other settings needs a tag starting with `smoke`). Raw logs go to `results/raw/sweeps/<tag>/`, one file per (arm, trial, seed), plus `<arm>_trials.json` recording the sampled trials. Start with `--dry-run`.
 - `analyze.py select`: picks the best trial per arm by the D-017 rule (mean FLOPs to reach 0.975 over the selection seeds, misses scored at full budget), where reaching means two consecutive evaluations at or above the target (D-018, `src/crossing.py`; `--crossing first|mean3` for sensitivity only). Writes `results/processed/sweep_<tag>_<arm>_<crossing>.csv`, and with `--write-configs` writes `configs/tuned/<tag>_<arm>_<crossing>.yaml` for the final seeds. Files without the crossing suffix are from the superseded first-crossing rule.
 - `rescore_sensitivity.py`: re-scores a sweep under all three crossing rules and checks selection bias by picking on one seed and scoring on the other; writes `results/processed/sensitivity_<tag>.csv`.
-- `analyze.py compare`: steps-to-target and FLOPs-to-target for groups of final runs (same crossing rule, `--crossing`), with bootstrap confidence intervals and a paired-bootstrap percentage difference against a reference group (the same seeds must be run for both).
+- `analyze.py compare`: steps-to-target and FLOPs-to-target for groups of final runs (same crossing rule, `--crossing`), with bootstrap confidence intervals and a paired-bootstrap percentage difference against a reference group (the same seeds must be run for both). The pre-registered outcome (D-019) is printed with `--alpha 0.025 --margin 15 --primary-targets 0.97 0.975 --shift-group A2`: a per-target verdict (supported / refuted / inconclusive) and an overall verdict per group.
+- `run_final.py`: Stage 3 final runs from `configs/stage3_plan.yaml` (D-019): 150 runs, resumable, parallel (`--workers`, `--threads`), never overwrites a raw log, writes `results/raw/` with the plan group, config hash and commit in the header. **Refuses to run** unless the git tag `prereg-v1` exists, is an ancestor of HEAD, and the locked files (plan, tuned configs, `src/`, `docs/HYPOTHESES.md`, `docs/METHOD.md`) are unchanged since the tag. `--dry-run` lists the jobs, `--groups` selects groups, `--smoke --out-dir <dir> --max-steps N` is a plumbing test that skips the lock and must not write to `results/raw/`. Logic in `src/final.py`, tests in `tests/test_final.py`.
+- `power_simulation.py`: seed noise of steps-to-target in the sweeps and the power of the D-019 outcome rule (E-007); writes `results/processed/power_stage3.csv`.
 - `flops_overhead.py`: per-step FLOP overhead of every arm (F-003).
 
 Typical flow:
@@ -14,8 +16,14 @@ python scripts/run_sweep.py --tag t1 --arms main --dry-run
 python scripts/run_sweep.py --tag t1 --arms main --workers 4
 python scripts/analyze.py select --tag t1 --write-configs
 python scripts/rescore_sensitivity.py --tag t1
-for s in 0 1 2 3 4 5 6 7 8 9; do python -m src.train --config configs/tuned/t1_base_two.yaml --seed $s; done   # only after the prereg-v1 tag
-python scripts/analyze.py compare --ref A --group A='results/raw/*_final-t1-base-two_base_s*.jsonl' --group D='results/raw/*_final-t1-meet-two_meet_s*.jsonl'
+python scripts/run_final.py --dry-run                      # list the 150 Stage 3 jobs
+python scripts/run_final.py --workers 4                      # only after the prereg-v1 tag (it refuses otherwise)
+python scripts/analyze.py compare --ref A \
+    --group A='results/raw/*_final-t1-base-two_base_s*.jsonl' \
+    --group D='results/raw/*_final-t1-meet-two_meet_s*.jsonl' \
+    --group A2='results/raw/*_final-t2-base-two_base_s*.jsonl' \
+    --alpha 0.025 --margin 15 --targets 0.97 0.975 0.98 --primary-targets 0.97 0.975 --shift-group A2   # H1
+# H6: same command with --group B='results/raw/*_final-t1-deepsup-two_deepsup_s*.jsonl' in place of D
 ```
 
 Still to write:
