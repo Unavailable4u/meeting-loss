@@ -14,8 +14,8 @@
 - **Metrics:** FLOPs-to-target (decisive) and steps-to-target (reported) at targets 0.97 and 0.975 (0.98 secondary). A target is reached at the first of two consecutive evaluations at or above it (D-018). Arm D (tuned config `t1_meet_two`) against arm A (`t1_base_two`), seeds 0 to 19, 3,000 steps.
 - **Pre-registered outcome (D-019, locked with `prereg-v1`):** *supported* if, at both 0.97 and 0.975, the paired change in mean FLOPs-to-target is at most -15% and its 97.5% bootstrap interval excludes zero, and the gain exceeds the A re-tuning shift; *refuted* if, at both targets, the 97.5% interval excludes a gain of 15% or more (lower bound above -15%); *inconclusive* otherwise (including when the two targets disagree). Note: arm D costs about 23% more FLOPs per step (F-003), so it needs about a 19% step reduction just to break even.
 - **Expectation recorded before the runs:** a null or negative result is the likely outcome (F-006, F-008; R-20).
-- **Status:** open (locked, not yet run)
-- **Linked findings:** F-006, F-008 (exploratory context only)
+- **Status:** **refuted** (confirmatory, 2026-10-23: D needs +36.9% and +35.5% FLOPs at 0.97 and 0.975; status line edited after the lock, see DR-006)
+- **Linked findings:** F-009 (result); F-006, F-008 (exploratory context)
 - **Paper sections:** Introduction, 5.1
 
 ## H2 (specificity): the backward-derived target is what matters
@@ -23,8 +23,8 @@
 - **Statement:** The gain is not matched by other auxiliary losses at the same layer: DSN-style deep supervision (arm B, primary implementation B-paper; B-code reported as a secondary implementation) and autoencoder reconstruction (arm C). Costs are compared at equal FLOPs, not equal cost per step.
 - **Metrics:** same as H1, arms A to D.
 - **Pre-registered threshold:** arm D beats both arm B and arm C under the same three-way rule as H1 (D relative to B and to C, 97.5% intervals, both primary targets). **Gated on H1:** tested only if H1 is supported (D-019); otherwise B and C are reported descriptively. Arm B is run on seeds 0 to 19, arm C on seeds 0 to 9 (so D versus C is paired on seeds 0 to 9). B's own comparison with A is H6.
-- **Status:** open (gated on H1)
-- **Linked findings:** none yet
+- **Status:** not tested (H1 was not supported, so the gate of D-019 stays closed; descriptive results for B and C in E-008; status line edited after the lock, DR-006)
+- **Linked findings:** none
 - **Paper sections:** 5.2
 
 ## H3 (mechanism): the meeting gradient points the right way
@@ -32,8 +32,8 @@
 - **Statement:** The gradient of the meeting loss on the lower layers is positively aligned with the true task gradient, and larger alignment goes with larger speedup.
 - **Metrics:** cosine similarity between `g_task` and `g_meet` (see `docs/METHOD.md`); correlation of per-seed alignment with per-seed speedup.
 - **Proposed success threshold:** median alignment positive at at least 90% of evaluation points after warm-up. Expectation from the literature: alignment is likely positive but well below 1 (Lee et al. 2015, Theorem 1 gives only a lower bound under perfect inverses; Meulemans et al. 2020 argue DTP follows Gauss-Newton-like targets).
-- **Status:** open
-- **Linked findings:** none yet
+- **Status:** supported on the pre-registered alignment threshold (2026-10-23: median alignment of arm D positive at 100% of evaluations after warm-up in 20 of 20 runs, about +0.75); the second half of the statement (larger alignment goes with larger speedup) is not supported: there is no speedup, and across 20 seeds the correlation is 0.15 (exploratory, p = 0.54). "After warm-up" was not defined numerically in advance; steps after 200 and after 1000 give the same result. Status line edited after the lock, DR-006
+- **Linked findings:** F-009
 - **Paper sections:** 6
 
 ## H4 (generality): the effect is not specific to one setting
@@ -50,8 +50,8 @@
 - **Statement:** Arm D's gain over arm A is not reproduced by control E (arm A with a tuned lower-layer learning-rate multiplier `low_lr_mult`, tuned with the same trial budget). Control F (exact-gradient target) is reported as a reference.
 - **Metrics:** same as H1.
 - **Pre-registered threshold:** arm D beats arm E under the H1 three-way rule (97.5% intervals, both primary targets). **Gated on H1** (D-019). If H1 is supported, the E refinement runs first: `low_lr_mult` in {0.5, 1, 2, 4, 8} swept on arm A's tuned config (`t1_base_two.yaml`) with fresh selection seeds (at least 100), the D-017 score and the D-018 rule, and the winner is run on the same seeds as D. Arm E as tuned in the t1 sweep (seeds 0 to 9) is reported either way.
-- **Status:** open (gated on H1)
-- **Linked findings:** none yet
+- **Status:** not tested (H1 was not supported; the E refinement was not run; arm E as tuned is reported descriptively in E-008; status line edited after the lock, DR-006)
+- **Linked findings:** none
 - **Paper sections:** 5.2, 6
 - **Note on control F (corrected 2026-10-22, D-018):** control F is nearly inert as implemented (F-005): its gradient on the middle state is about 0.0016 times `lam_meet` times the task gradient, so it is pre-registered as a **negative control** (arm A plus 5.8% FLOPs per step). No inference is drawn from F under AdamW. Its rescaling is decided at Stage 5, before the SGD experiments (R-19).
 
@@ -60,8 +60,8 @@
 - **Origin:** *generated from an exploratory finding* (F-007: at the selection level arm B-paper scores 191.2 GFLOPs to 0.975 against 232.6 for both tunings of arm A, 18% lower; its runner-up is 6% lower). It is added to the pre-registration on 2026-10-23, before any final seed, so the test is confirmatory; the origin is stated wherever the result is reported.
 - **Statement:** Deep supervision on the middle state (arm B, B-paper implementation, tuned config `t1_deepsup_two`) reduces the FLOPs needed to reach a target validation accuracy compared with the tuned baseline at equal compute.
 - **Metrics and rule:** exactly as H1 (targets 0.97 and 0.975, 97.5% paired-bootstrap interval, margin 15%, both targets must agree, gain must exceed the A re-tuning shift), arm B against arm A, seeds 0 to 19.
-- **Status:** open (locked, not yet run)
-- **Linked findings:** F-006, F-007 (exploratory context only)
+- **Status:** **refuted** (confirmatory, 2026-10-23: B is +2.3% and +1.7% against A at 0.97 and 0.975; status line edited after the lock, see DR-006; against the second tuning of A the sign differs, F-011)
+- **Linked findings:** F-010 (result), F-011; F-006, F-007 (exploratory context)
 - **Paper sections:** 5.2
 
 ## Roles of the other groups (D-019)

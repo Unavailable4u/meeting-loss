@@ -1,18 +1,18 @@
 # Plan
 
-**Last updated:** 2026-10-22 (first tuning pass E-004; crossing rule D-018, DR-004; F-005, F-006)
+**Last updated:** 2026-10-23 (Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
-**Current stage:** Stage 1 (baseline tuning) with Stage 2 code ready (method v1.1)
+**Current stage:** Stage 3 finished; the gate decision is open (see below)
 
 ## Current focus
 
-All tuning passes are done (E-004 to E-006). D-019 (final D-003, DR-005) fixes the Stage 3 protocol and pre-registration (E-007 for the power). Next: commit the lock, tag `prereg-v1`, then run Stage 3 with `scripts/run_final.py` (150 runs).
+Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% more FLOPs than tuned arm A (97.5% intervals +26% to +47% and +27% to +44% at 0.97 and 0.975). **H6 is refuted:** deep supervision equals A at those targets (+2%). H2 and H5 were not tested (gated on H1). Gradient alignment of D is high (+0.75, H3 threshold met), so the null is not explained by a misaligned target. The gate row "No gain or worse" of `docs/GUIDE.md` Section 6 applies.
 
 ## Next three actions
 
-1. Commit the lock (D-019, DR-005, `configs/stage3_plan.yaml`, `src/final.py`, `scripts/run_final.py`) and create the git tag `prereg-v1` on that commit, then push the commit and the tag. Do not run final seeds before the tag; `run_final.py` refuses to start without it.
-2. Stage 3: `python scripts/run_final.py --workers 4` (150 runs of 3,000 steps: seeds 0 to 19 for A, D, B and A2; seeds 0 to 9 for C, E, B-code, F, V1, V2, V3; about 2.7 hours; resumes if interrupted). Then the compare command of `scripts/README.md` with `--alpha 0.025 --margin 15 --primary-targets 0.97 0.975 --shift-group A2` decides H1 and H6.
-3. If H1 is supported: test H2, and run the E refinement (`low_lr_mult` sweep on arm A) before H5 (D-019 point 7). If H1 is refuted or inconclusive: H2 and H5 are not tested; apply the Stage 3 gate in `docs/GUIDE.md` Section 6 (no seeds are added to the same test, D-019 point 2). Control F's rescaling is decided at Stage 5 (R-19).
+1. **Choose the direction after the gate** and record it as a decision (D-020, with a drift entry if the plan changes). Options in the guide: (a) Stage 4 diagnostics and ablations that explain the null (why does a well-aligned target add nothing next to backpropagation? e.g. SGD instead of AdamW, a weaker or absent backprop path, a different layer); (b) a variant design that makes the backward path matter more; (c) switch to another idea from the idea bank; (d) write the result up as a negative-result paper or workshop submission, which Stage 3 already supports (C-09).
+2. Whatever is chosen, any new claim needs a planned confirmatory run on fresh seeds (D-015). Deep supervision's lead against the second baseline tuning and at 0.98 (F-010, F-011) is the only positive lead, and it is exploratory. The reference baseline must be fixed before such a run (R-21).
+3. Regardless of the choice: regenerate the figures from `results/raw/` (`make_figures.py` is still to be written), and keep the paper's setup section in line with D-018, D-019 and the scope in R-21.
 
 ## Stage table
 
@@ -21,7 +21,7 @@ All tuning passes are done (E-004 to E-006). D-019 (final D-003, DR-005) fixes t
 | 0 | Project setup and documents | 1 | **Done** (2026-10-21) | All living docs exist; decisions recorded; repo pushed |
 | 1 | Baseline reproduction and tuning | 1 | **In progress** (E-001 to E-006 done: all tuning passes complete; D-019 written, the lock tag pending) | About 98% MNIST validation accuracy; reproducible across seeds; targets chosen (D-003); FLOP counter verified |
 | 2 | Implement the meeting loss and test it | 1 to 2 | **Code ready** (method v1.1, 46 tests pass); diagnostic runs done (E-003, exploratory: no collapse) | All unit tests pass; no collapse in diagnostic runs; METHOD matches code |
-| 3 | Main comparison (arms A to D) | 2 to 3 | Not started | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
+| 3 | Main comparison (arms A to D) | 2 to 3 | **Done** (2026-10-23, E-008): H1 and H6 refuted, H2 and H5 not tested; gate decision pending | H1 and H2 evaluated against pre-registered thresholds; gate decision recorded |
 | 4 | Diagnostics and ablations | 3 to 4 | Not started | Components that matter identified; H3 evaluated |
 | 5 | Generalization (CIFAR-10, modular arithmetic) | 4 to 6 | Not started | H4 evaluated on at least one setting beyond MNIST |
 | 6 | Robustness and scale | 6 to 7 | Not started | Table of where the method helps, does not help, and hurts |
@@ -62,3 +62,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
 | 2026-10-22 | Re-tuning pass t2 for arm A (E-005, exploratory): same winning score as t1 under the adopted rule (232.6 GFLOPs, 0.0% shift) with very different hyperparameters (F-007); B's t1 winner is 18% below both. Variant sweeps (200 runs) finished; analysis pending. |
 | 2026-10-22 | Variant sweeps analyzed (E-006, exploratory, F-008): no meeting-loss variant beats tuned A on FLOPs beyond noise; V3 ties A with about zero alignment; B-paper is ahead of B-code. All tuning passes complete; D-003 and the `prereg-v1` lock are next. |
 | 2026-10-23 | D-019 written (final D-003, DR-005): targets, seeds (20 for A, D, B, A2; 10 for the rest), three-way outcome rule with 97.5% intervals for H1 and new H6, H2 and H5 gated on H1, E refinement pre-registered, F a negative control. Lock-guarded runner `scripts/run_final.py` and `configs/stage3_plan.yaml` added. Noise and power: E-007. |
+| 2026-10-23 | Tag `prereg-v1` set on 3378d36; Stage 3 final runs finished (150 runs, about 2.75 h) and analyzed as pre-registered (E-008): H1 refuted (D +36% FLOPs), H6 refuted (B +2%), H2 and H5 not tested, H3 alignment threshold met. F-009 to F-011; R-21. Gate decision is next. |

@@ -44,3 +44,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: D-019 (D-003 superseded; D-007 and D-014 noted)
 - Docs updated: [x] PLAN  [x] HYPOTHESES  [ ] METHOD (no change)  [x] DECISIONS  [x] EXPERIMENT_LOG (E-007)  [ ] FINDINGS (no new finding)  [x] RISKS (R-20)  [x] CLAIMS (C-01, C-02, C-06 wording; C-08 added)  [ ] FIGURES (none)  [ ] PAPER_DRAFT (the setup section must state D-018, D-019 and the origin of H6 once results exist)  [x] GUIDE (changelog 1.3, Sections 4 and 5, Stage 3 gate row)  [x] scripts/README  [x] CLAUDE.md (test count)
 - Experiments invalidated or needing rerun: none. The tuning results are unchanged.
+
+## DR-006: Status lines of the locked HYPOTHESES.md updated after the Stage 3 results; analyses not pre-registered
+- Date: 2026-10-23
+- Trigger: change to a file under the `prereg-v1` lock (`docs/HYPOTHESES.md`), made to record outcomes (not a change of any pre-registered hypothesis, threshold, rule or seed set); analyses added after seeing the results
+- What changed: before: Status lines of H1 to H3, H5 and H6 read "open". After: H1 refuted, H6 refuted, H2 and H5 not tested (gated), H3 supported on the alignment threshold, each with the finding IDs. The statements, metrics, thresholds, gating and roles of D-019 are untouched (the diff against the tag is limited to Status and Linked-findings lines). Not pre-registered and therefore exploratory: comparisons of D and B against the second tuning of A (A2), the 0.98 analysis for B, the selection-to-final comparison, the Spearman correlation of alignment with speedup, and the two readings of "after warm-up" for H3 (the threshold was pre-registered, the warm-up length was not). The CLI also prints a verdict label for descriptive groups; they decide nothing (D-019).
+- Decision recorded: none (D-019 stands; the gate decision will be D-020)
+- Docs updated: [x] PLAN  [x] HYPOTHESES (status lines only)  [ ] METHOD (no change)  [ ] DECISIONS  [x] EXPERIMENT_LOG (E-008; note on E-007)  [x] FINDINGS (F-009 to F-011)  [x] RISKS (R-20 outcome, R-21)  [x] CLAIMS (status of C-01, C-03 and C-08 changed; C-02 and C-06 annotated as not tested; C-09 added)  [ ] FIGURES (none yet)  [ ] PAPER_DRAFT (not started for results)
+- Experiments invalidated or needing rerun: none.

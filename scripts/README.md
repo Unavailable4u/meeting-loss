@@ -24,6 +24,11 @@ python scripts/analyze.py compare --ref A \
     --group A2='results/raw/*_final-t2-base-two_base_s*.jsonl' \
     --alpha 0.025 --margin 15 --targets 0.97 0.975 0.98 --primary-targets 0.97 0.975 --shift-group A2   # H1
 # H6: same command with --group B='results/raw/*_final-t1-deepsup-two_deepsup_s*.jsonl' in place of D
+# Run-file patterns of the other groups (the arm name in a file is not always the group name):
+#   C      *_final-t1-ae-two_ae_s*              E      *_final-t1-base_lowlr-two_base_s*
+#   Bcode  *_final-t1-deepsup_code-two_deepsup_s*   F  *_final-t1-meet_grad-two_meet_grad_s*
+#   V1     *_final-t1-meet_noise-two_meet_s*    V2     *_final-t1-meet_ao-two_meet_ao_s*
+#   V3     *_final-t1-meet_frozen-two_meet_frozen_s*
 ```
 
 Still to write:
