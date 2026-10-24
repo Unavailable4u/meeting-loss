@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 MEET_ARMS = ("meet", "meet_ao", "meet_frozen")
-ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad",)
+ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective")
 
 
 def _act(name):
