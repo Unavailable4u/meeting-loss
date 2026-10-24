@@ -111,3 +111,12 @@ Rules:
 - Scope: MNIST MLP, arm A, 25 trials per tuning, 2 selection seeds, target 0.975.
 - Implications: the dominant noise is in the tuned configuration (2-seed selection among 25 trials, with the minimum of a noisy score chosen), not in the training seed; F-007's 0.0% re-tuning shift was a selection-level tie that did not carry over. The D-019 rule uses the shift only to block a "supported" verdict, so it did not matter for the two "refuted" verdicts. H1 holds against either tuning of A; H6 does not (F-010). Any future comparison should pre-register which baseline is the reference, and either select with more seeds or re-evaluate the top few trials on fresh seeds before choosing. Statements about arms must say they are conditional on the tuned configurations (R-21).
 - Found / last re-verified: 2026-10-23
+
+## F-012: A selective backward pass (backward only for the highest-loss 30% of each batch) reached 97.0% and 97.5% at about 0.61 to 0.63 of tuned arm A's FLOPs in a 3-seed pilot; random rows of the same size did worse than A
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (3 seeds, one tuning of A, FLOPs not wall-clock)
+- Evidence: E-010 (pilot GO under the rule written before the run); E-009 (gradient concentration). S30 / S50 / R30 mean FLOPs ratio vs A: 0.634 / 0.768 / 1.413 at 0.97 and 0.612 / 0.707 / 1.181 at 0.975; no missed seeds; every individual seed of S30 and S50 is below the 0.85 GO line at both targets (highest: S50 seed 601 at 0.975, 0.809).
+- Scope: MNIST MLP, hyperparameters inherited from `t1_base_two.yaml`, 3,000 steps, seeds 600 to 602, sel_warmup 100, FLOPs counted for the forward pass of the full batch plus the backward pass of the selected rows (optimizer and top-k ignored).
+- Implications: a lead for a pre-registered test, not a claim (D-015). Most of the saving follows from the per-step cost, so the question for a confirmatory test is whether the step count stays near A's across seeds, tunings and a second setting. R30 shows that the selection by loss is what keeps the step count low.
+- Found / last re-verified: 2026-10-25

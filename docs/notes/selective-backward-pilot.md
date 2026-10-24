@@ -63,3 +63,9 @@ python scripts/pilot_selective.py --tag pilot1       # 4 variants x 3 seeds x 3,
 ```
 
 It prints the table and the verdict and writes `results/processed/pilot_selective_pilot1.csv`. Log it as an `exploratory` entry in `EXPERIMENT_LOG.md`.
+
+## Result (added 2026-10-25 after the run; the rule above is unchanged)
+
+Run at commit 22f2b3a, seeds 600 to 602, logged as E-010. **Verdict: GO.** S30 FLOPs-to-target ratio 0.634 (0.97) and 0.612 (0.975); S50 0.768 and 0.707; no missed seed; random control R30 1.413 and 1.181 (selection by loss matters: R30 costs +93.1% FLOPs-to-0.975 relative to S30). See `docs/EXPERIMENT_LOG.md` (E-010), `docs/FINDINGS.md` (F-012) and `docs/DECISIONS.md` (D-021, proposed).
+
+Post-hoc remark (written after seeing the result, no effect on the verdict): the STOP clause "or 2 or more seeds missed 0.975" is implemented per variant (STOP needs every main variant to have ratio >= 1.00 or at least 2 misses). The verdict is GO under any reading, because S30 and S50 satisfy the GO condition.
