@@ -9,6 +9,7 @@ Written (shared logic lives in `src/sweep.py`, tested in `tests/test_sweep.py`; 
 - `power_simulation.py`: seed noise of steps-to-target in the sweeps and the power of the D-019 outcome rule (E-007); writes `results/processed/power_stage3.csv`.
 - `flops_overhead.py`: per-step FLOP overhead of every arm (F-003).
 - `gradient_concentration.py`: exploratory check of how much of the gradient the highest-loss examples carry (plan and decision rule: `docs/notes/gradient-concentration-check.md`; logic in `exploratory/gradconc.py`, outside the locked `src/`). `--synthetic` is a plumbing test.
+- `pilot_selective.py`: pilot of the selective backward pass (arm `selective`, code in `src/selective.py`); plan and decision rule: `docs/notes/selective-backward-pilot.md`. `--synthetic` is a plumbing test.
 
 Typical flow:
 

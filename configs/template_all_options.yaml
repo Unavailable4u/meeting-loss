@@ -19,6 +19,10 @@ lam_inv: 1.0                   # ignored by meet_frozen / meet_grad
 warmup_steps: 500
 sigma_inv: 0.0                 # V1: > 0 adds noise to the inverse loss (denoising), meet / meet_ao only
 eta_hat: 0.1                   # meet_grad only: target = h - eta_hat * per-sample dL/dh
+# selective backward pass (arm: selective), decision D-0xx / docs/notes/selective-backward-pilot.md
+sel_frac: 0.3                  # fraction of each batch that goes through the backward pass
+sel_warmup: 100                # steps with the full backward pass first
+sel_mode: top                  # top (highest loss) | random (control: same size, random rows)
 # auxiliary-loss arms (deepsup B, ae C)
 lam_aux: 0.3
 aux_sched: const               # const | linear (decays to zero over max_steps, DSN paper)

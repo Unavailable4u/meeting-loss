@@ -21,6 +21,7 @@ from src.crossing import DEFAULT_CROSSING, crossing_index
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
 from src.model import MEET_ARMS, MeetNet, compute_losses
+from src.selective import selective_step
 from src.utils import set_seed
 
 
@@ -87,19 +88,27 @@ def run(cfg, device="cpu", data=None):
     opt, sched = build_optimizer(model, cfg)
     bx, by = next(iter(train_loader))
     fps = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg)
+    selective = cfg["arm"] == "selective"
+    warm = cfg.get("sel_warmup", 0) if selective else 0
+    fps_warm = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg, step=0) if warm else fps
 
-    log, step, t0 = [], 0, time.time()
+    log, step, t0, cum_flops = [], 0, time.time(), 0
     while step < cfg["max_steps"]:
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
-            loss, parts, _, _ = compute_losses(model, x, y, cfg, step)
             opt.zero_grad(set_to_none=True)
-            loss.backward()
+            if selective:
+                loss_t, k, _ = selective_step(model, x, y, cfg, step)
+                parts = {"task": loss_t, "k": torch.tensor(float(k))}
+            else:
+                loss, parts, _, _ = compute_losses(model, x, y, cfg, step)
+                loss.backward()
             opt.step()
             sched.step()
+            cum_flops += fps_warm if step < warm else fps
             step += 1
             if step % cfg["eval_every"] == 0:
-                row = dict(step=step, flops=step * fps, time=time.time() - t0,
+                row = dict(step=step, flops=cum_flops, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),
                            **{k: v.item() for k, v in parts.items()})
                 if cfg["arm"] in MEET_ARMS or cfg["arm"] == "meet_grad":
