@@ -8,6 +8,7 @@ Written (shared logic lives in `src/sweep.py`, tested in `tests/test_sweep.py`; 
 - `run_final.py`: Stage 3 final runs from `configs/stage3_plan.yaml` (D-019): 150 runs, resumable, parallel (`--workers`, `--threads`), never overwrites a raw log, writes `results/raw/` with the plan group, config hash and commit in the header. **Refuses to run** unless the git tag `prereg-v1` exists, is an ancestor of HEAD, and the locked files (plan, tuned configs, `src/`, `docs/HYPOTHESES.md`, `docs/METHOD.md`) are unchanged since the tag. `--dry-run` lists the jobs, `--groups` selects groups, `--smoke --out-dir <dir> --max-steps N` is a plumbing test that skips the lock and must not write to `results/raw/`. Logic in `src/final.py`, tests in `tests/test_final.py`.
 - `power_simulation.py`: seed noise of steps-to-target in the sweeps and the power of the D-019 outcome rule (E-007); writes `results/processed/power_stage3.csv`.
 - `flops_overhead.py`: per-step FLOP overhead of every arm (F-003).
+- `gradient_concentration.py`: exploratory check of how much of the gradient the highest-loss examples carry (plan and decision rule: `docs/notes/gradient-concentration-check.md`; logic in `exploratory/gradconc.py`, outside the locked `src/`). `--synthetic` is a plumbing test.
 
 Typical flow:
 
