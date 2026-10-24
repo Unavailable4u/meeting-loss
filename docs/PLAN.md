@@ -1,12 +1,14 @@
 # Plan
 
-**Last updated:** 2026-10-23 (Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
+**Last updated:** 2026-10-25 (selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 3 finished; the gate decision is open (see below)
 
 ## Current focus
 
 Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% more FLOPs than tuned arm A (97.5% intervals +26% to +47% and +27% to +44% at 0.97 and 0.975). **H6 is refuted:** deep supervision equals A at those targets (+2%). H2 and H5 were not tested (gated on H1). Gradient alignment of D is high (+0.75, H3 threshold met), so the null is not explained by a misaligned target. The gate row "No gain or worse" of `docs/GUIDE.md` Section 6 applies.
+
+**Side line (exploratory, 2026-10-25):** the selective backward pass (arm S) pilot, E-010, met its GO rule: S30 reached 0.97 and 0.975 at 0.63 and 0.61 of tuned A's FLOPs (3 seeds, random control worse than A; F-012). This is a lead, not a claim. D-021 (proposed) lists what must be decided before a pre-registered test; it does not replace the open gate decision D-020 below.
 
 ## Next three actions
 
@@ -63,3 +65,4 @@ Optimizer, architecture (as primary focus), loss-function variants beyond the me
 | 2026-10-22 | Variant sweeps analyzed (E-006, exploratory, F-008): no meeting-loss variant beats tuned A on FLOPs beyond noise; V3 ties A with about zero alignment; B-paper is ahead of B-code. All tuning passes complete; D-003 and the `prereg-v1` lock are next. |
 | 2026-10-23 | D-019 written (final D-003, DR-005): targets, seeds (20 for A, D, B, A2; 10 for the rest), three-way outcome rule with 97.5% intervals for H1 and new H6, H2 and H5 gated on H1, E refinement pre-registered, F a negative control. Lock-guarded runner `scripts/run_final.py` and `configs/stage3_plan.yaml` added. Noise and power: E-007. |
 | 2026-10-23 | Tag `prereg-v1` set on 3378d36; Stage 3 final runs finished (150 runs, about 2.75 h) and analyzed as pre-registered (E-008): H1 refuted (D +36% FLOPs), H6 refuted (B +2%), H2 and H5 not tested, H3 alignment threshold met. F-009 to F-011; R-21. Gate decision is next. |
+| 2026-10-25 | Arm S (selective backward pass) added to `src/` (DR-007) and piloted on seeds 600 to 602 (E-010, exploratory, rule written before the run): verdict GO, S30 about 0.61 to 0.63 of A's FLOPs-to-target, random control R30 worse than A (F-012). 87 tests pass. D-021 proposed; four design items open (S tuning, baseline, seeds and threshold, second setting). D-020 (gate) still open. |
