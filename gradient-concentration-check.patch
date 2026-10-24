@@ -1,0 +1,521 @@
+From f010744eaee2127e144920596986cc419d42f419 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 06:07:20 +0000
+Subject: [PATCH] Exploratory: gradient-concentration check (plan and decision
+ rule written before the run)
+
+---
+ docs/notes/gradient-concentration-check.md |  68 +++++++++++
+ exploratory/__init__.py                    |   1 +
+ exploratory/gradconc.py                    | 130 +++++++++++++++++++++
+ scripts/README.md                          |   1 +
+ scripts/gradient_concentration.py          | 121 +++++++++++++++++++
+ tests/scripts_loader.py                    |  11 ++
+ tests/test_gradient_concentration.py       | 117 +++++++++++++++++++
+ 7 files changed, 449 insertions(+)
+ create mode 100644 docs/notes/gradient-concentration-check.md
+ create mode 100644 exploratory/__init__.py
+ create mode 100644 exploratory/gradconc.py
+ create mode 100644 scripts/gradient_concentration.py
+ create mode 100644 tests/scripts_loader.py
+ create mode 100644 tests/test_gradient_concentration.py
+
+diff --git a/docs/notes/gradient-concentration-check.md b/docs/notes/gradient-concentration-check.md
+new file mode 100644
+index 0000000..e271958
+--- /dev/null
++++ b/docs/notes/gradient-concentration-check.md
+@@ -0,0 +1,68 @@
++# Check: is the gradient concentrated in the examples the forward pass gets wrong?
++
++**Status:** plan and decision rule, written BEFORE the first real run. Type: `exploratory`. Do not edit the rule after seeing results; if it needs to change, add a dated note below instead.
++
++## The idea being checked (selective backward pass)
++
++The meeting loss failed (E-008): it re-sent a signal backprop already had. A different way to spend fewer FLOPs is to stop doing backward work where the forward pass already agrees with the label. The plan:
++
++1. Forward pass on the whole batch (needed anyway; it also gives every example's loss).
++2. Backward pass only for the highest-loss fraction `f` of the batch (for example 30%).
++
++If the rest of the batch contributes little to the gradient, the update barely changes and the step is cheaper. This is close to existing "selective backprop" and online batch selection work, so the novelty is low (to read and verify before any claim: Jiang et al. 2019 "Accelerating Deep Learning by Focusing on the Biggest Losers"; Katharopoulos and Fleuret 2018, importance sampling with gradient norms; Loshchilov and Hutter 2015, online batch selection). The value would be in a rigorous compute-matched test with our pipeline.
++
++## What the check measures
++
++Train the tuned baseline (arm A, `configs/tuned/t1_base_two.yaml`, 3,000 steps) on 3 new seeds (500, 501, 502). At steps 100, 200, 500, 1000, 1500, 2000 and 3000, take 16 fixed batches of 128 **training** examples (the same shuffling granularity the real algorithm would use), compute every example's gradient, and measure for the top-`f` examples by loss (`f` = 10, 20, 30, 50%) and for a random subset of the same size:
++
++| Metric | Meaning |
++|---|---|
++| `norm_share` | sum of per-example gradient norms in the subset / sum over the batch |
++| `cos` | cosine between the subset's gradient sum and the full batch gradient (does it point the same way?) |
++| `proj_share` | share of the full gradient's squared norm that the subset accounts for |
++| `omitted` | norm of the left-out examples' gradient / norm of the full gradient |
++| `loss_share` | share of the total loss held by the subset |
++
++Measuring never changes the training run (separate random generator; tested).
++
++## Decision rule (primary: `f` = 30%, mean over seeds)
++
++- **PROMISING:** `norm_share` >= 0.80 **and** `cos` >= 0.90 at all of steps 500, 1000 and 2000.
++- **DROP:** `norm_share` < 0.60 at step 1000.
++- **INCONCLUSIVE:** anything else. Then look at the table over fractions (a larger `f` such as 50% may still work) before deciding; this does not by itself justify building the method.
++
++Reference: a random 30% would hold about 30% of the norm on average.
++
++## What each outcome leads to
++
++- **PROMISING:** build a "selective backward" arm and test it with the full pipeline (tuning with the equal-budget protocol, a noise floor with several baseline tunings, FLOPs counted honestly, pre-registered thresholds). This check is only a necessary condition.
++- **DROP:** discard the idea; take the next idea from the idea bank.
++- **INCONCLUSIVE:** one more look at larger fractions, then decide; do not tune the rule to the data.
++
++## What this check can NOT show
++
++- It does not prove the method saves compute. It measures a model trained with the **full** gradient; training with a selective backward pass follows a different trajectory (it over-weights hard examples, and with a smaller effective batch the gradient is noisier).
++- High-loss examples may include mislabeled or ambiguous ones; their large gradients are not necessarily useful.
++- Concentration is measured on the MNIST MLP only.
++
++## Achievable savings if the check passes (exact counts, batch 128, from F-001 and F-003)
++
++Forward costs 68.8M FLOPs per step and the backward pass 86.2M (total 155.1M for arm A).
++
++| Fraction sent backward | Hand-written backward on the selected rows | Re-run forward and backward on the subset |
++|---|---|---|
++| 50% | 111.9M, **-28%** | 146.3M, -6% |
++| 30% | 94.7M, **-39%** | 115.3M, -26% |
++
++The selection step itself (sorting the batch's losses) is negligible. A run that needs more steps loses part of this saving, which is why the real test is FLOPs-to-target and not the per-step count.
++
++## How to run
++
++```
++git am --3way gradient-concentration-check.patch
++python -m pytest -q
++git add -A && git commit -m "..." && git push      # commit the plan BEFORE running
++python scripts/gradient_concentration.py --tag gc1  # 3 seeds x 3,000 steps, about 15 minutes on a laptop
++```
++
++It prints the summary table and the verdict and writes `results/processed/gradient_concentration_gc1.csv`. Seeds 500 to 502 are new (sweeps used 100, 101, 1000, 1001, 2000, 2001; Stage 3 used 0 to 19). Log the result in `EXPERIMENT_LOG.md` as an `exploratory` entry with the printed verdict.
+diff --git a/exploratory/__init__.py b/exploratory/__init__.py
+new file mode 100644
+index 0000000..ef2f425
+--- /dev/null
++++ b/exploratory/__init__.py
+@@ -0,0 +1 @@
++"""Exploratory analyses that sit outside `src/` (which is locked by the prereg-v1 guard)."""
+diff --git a/exploratory/gradconc.py b/exploratory/gradconc.py
+new file mode 100644
+index 0000000..004bbad
+--- /dev/null
++++ b/exploratory/gradconc.py
+@@ -0,0 +1,130 @@
++"""Gradient concentration: how much of the gradient comes from the highest-loss examples?
++
++Exploratory check described in docs/notes/gradient-concentration-check.md (decision rule written
++BEFORE the run). Per-example gradients are computed with torch.func; nothing here touches the
++global random state, so measuring does not change the training trajectory.
++"""
++import math
++
++import torch
++import torch.nn.functional as F
++from torch.func import functional_call, grad, vmap
++
++from src.model import MeetNet, compute_losses
++from src.train import build_optimizer, evaluate
++from src.utils import set_seed
++
++# ---- pre-registered decision rule (docs/notes/gradient-concentration-check.md) ----
++PRIMARY_FRACTION = 0.3
++RULE_STEPS = (500, 1000, 2000)
++PROMISING_NORM_SHARE = 0.80
++PROMISING_COS = 0.90
++DROP_NORM_SHARE = 0.60          # at step 1000
++
++
++def per_example_grads(model, x, y):
++    """Flattened per-example gradients of the cross-entropy loss, shape [B, P], and per-example losses [B]."""
++    params = {k: v.detach() for k, v in model.named_parameters() if v.requires_grad}
++    buffers = {k: v.detach() for k, v in model.named_buffers()}
++
++    def loss_fn(p, xi, yi):
++        logits = functional_call(model, (p, buffers), (xi.unsqueeze(0),))
++        return F.cross_entropy(logits, yi.unsqueeze(0))
++
++    g = vmap(grad(loss_fn), in_dims=(None, 0, 0))(params, x, y)
++    flat = torch.cat([g[k].reshape(x.shape[0], -1) for k in params], dim=1)
++    with torch.no_grad():
++        losses = F.cross_entropy(model(x), y, reduction="none")
++    return flat, losses
++
++
++def subset_metrics(flat, losses, idx):
++    """How well does the subset `idx` represent the full batch gradient (sum over examples)?
++
++    norm_share  sum of per-example gradient norms in the subset / sum over the batch
++    proj_share  <subset gradient, full gradient> / ||full gradient||^2  (share of the update kept)
++    cos         cosine between the subset gradient and the full gradient (direction fidelity)
++    omitted     ||gradient of the examples left out|| / ||full gradient||
++    loss_share  share of the total loss held by the subset
++    """
++    norms = flat.norm(dim=1)
++    G = flat.sum(0)
++    gS = flat[idx].sum(0)
++    eps = 1e-30
++    return dict(
++        norm_share=(norms[idx].sum() / (norms.sum() + eps)).item(),
++        proj_share=((gS @ G) / (G @ G + eps)).item(),
++        cos=F.cosine_similarity(gS, G, dim=0, eps=1e-12).item(),
++        omitted=((G - gS).norm() / (G.norm() + eps)).item(),
++        loss_share=(losses[idx].sum() / (losses.sum() + eps)).item(),
++    )
++
++
++def concentration(flat, losses, fractions, gen):
++    """Metrics for the top-loss subset and for a random subset of the same size, per fraction."""
++    B = flat.shape[0]
++    order = torch.argsort(losses, descending=True)
++    rand = torch.randperm(B, generator=gen)
++    out = {}
++    for f in fractions:
++        k = min(B, max(1, math.ceil(f * B)))
++        out[("top", f)] = subset_metrics(flat, losses, order[:k])
++        out[("random", f)] = subset_metrics(flat, losses, rand[:k])
++    return out
++
++
++def measure_pool(model, pool, fractions, gen, device="cpu"):
++    """Average the metrics over a fixed pool of training batches. Returns {(mode, fraction): {metric: mean}} and mean loss."""
++    acc, mean_loss = {}, 0.0
++    for x, y in pool:
++        flat, losses = per_example_grads(model, x.to(device), y.to(device))
++        mean_loss += losses.mean().item() / len(pool)
++        for key, m in concentration(flat, losses, fractions, gen).items():
++            d = acc.setdefault(key, {k: 0.0 for k in m})
++            for k, v in m.items():
++                d[k] += v / len(pool)
++    return acc, mean_loss
++
++
++def run_with_checkpoints(cfg, train_loader, val_loader, pool, checkpoints, fractions, device="cpu", measure=True):
++    """Train arm A (plain network) and measure gradient concentration at the checkpoints.
++    Returns (rows, model). Measuring uses its own generator and never changes the training."""
++    if cfg["arm"] != "base":
++        raise ValueError("gradient concentration is measured on the plain baseline (arm base)")
++    set_seed(cfg["seed"])
++    model = MeetNet(arm=cfg["arm"], act=cfg.get("act", "relu")).to(device)
++    opt, sched = build_optimizer(model, cfg)
++    gen = torch.Generator().manual_seed(12345 + cfg["seed"])
++    cps = set(checkpoints)
++    rows, step = [], 0
++    while step < cfg["max_steps"]:
++        for x, y in train_loader:
++            x, y = x.to(device), y.to(device)
++            loss, _, _, _ = compute_losses(model, x, y, cfg, step)
++            opt.zero_grad(set_to_none=True)
++            loss.backward()
++            opt.step()
++            sched.step()
++            step += 1
++            if measure and step in cps:
++                res, mean_loss = measure_pool(model, pool, fractions, gen, device)
++                acc = evaluate(model, val_loader, device)
++                for (mode, f), m in res.items():
++                    rows.append(dict(seed=cfg["seed"], step=step, mode=mode, fraction=f, val_acc=acc,
++                                     pool_loss=mean_loss, n_batches=len(pool), **m))
++            if step >= cfg["max_steps"]:
++                break
++    return rows, model
++
++
++def decide(norm_share_by_step, cos_by_step):
++    """Apply the pre-registered rule to {step: mean metric at the primary fraction}.
++    PROMISING  norm_share >= 0.80 and cos >= 0.90 at steps 500, 1000 and 2000
++    DROP       norm_share < 0.60 at step 1000
++    otherwise  INCONCLUSIVE"""
++    if all(norm_share_by_step.get(s, 0) >= PROMISING_NORM_SHARE and cos_by_step.get(s, 0) >= PROMISING_COS
++           for s in RULE_STEPS):
++        return "PROMISING"
++    if norm_share_by_step.get(1000, 1.0) < DROP_NORM_SHARE:
++        return "DROP"
++    return "INCONCLUSIVE"
+diff --git a/scripts/README.md b/scripts/README.md
+index c71d1d8..1a77e36 100644
+--- a/scripts/README.md
++++ b/scripts/README.md
+@@ -8,6 +8,7 @@ Written (shared logic lives in `src/sweep.py`, tested in `tests/test_sweep.py`;
+ - `run_final.py`: Stage 3 final runs from `configs/stage3_plan.yaml` (D-019): 150 runs, resumable, parallel (`--workers`, `--threads`), never overwrites a raw log, writes `results/raw/` with the plan group, config hash and commit in the header. **Refuses to run** unless the git tag `prereg-v1` exists, is an ancestor of HEAD, and the locked files (plan, tuned configs, `src/`, `docs/HYPOTHESES.md`, `docs/METHOD.md`) are unchanged since the tag. `--dry-run` lists the jobs, `--groups` selects groups, `--smoke --out-dir <dir> --max-steps N` is a plumbing test that skips the lock and must not write to `results/raw/`. Logic in `src/final.py`, tests in `tests/test_final.py`.
+ - `power_simulation.py`: seed noise of steps-to-target in the sweeps and the power of the D-019 outcome rule (E-007); writes `results/processed/power_stage3.csv`.
+ - `flops_overhead.py`: per-step FLOP overhead of every arm (F-003).
++- `gradient_concentration.py`: exploratory check of how much of the gradient the highest-loss examples carry (plan and decision rule: `docs/notes/gradient-concentration-check.md`; logic in `exploratory/gradconc.py`, outside the locked `src/`). `--synthetic` is a plumbing test.
+ 
+ Typical flow:
+ 
+diff --git a/scripts/gradient_concentration.py b/scripts/gradient_concentration.py
+new file mode 100644
+index 0000000..9dfbb9f
+--- /dev/null
++++ b/scripts/gradient_concentration.py
+@@ -0,0 +1,121 @@
++"""Exploratory check: how much of the gradient comes from the highest-loss examples?
++
++Trains the tuned baseline (arm A) for 3,000 steps on several new seeds and, at checkpoints, measures
++what share of the batch gradient the top-30% highest-loss examples carry (and whether they point the
++same way as the full gradient). The decision rule was written before the run:
++docs/notes/gradient-concentration-check.md.
++
++Usage:
++  python scripts/gradient_concentration.py --tag gc1                    # real run (MNIST, 3 seeds, about 15 minutes)
++  python scripts/gradient_concentration.py --synthetic --max-steps 60 --checkpoints 20 40 60 --seeds 0 --tag smoke
++"""
++import argparse
++import csv
++import itertools
++import pathlib
++import sys
++
++import numpy as np
++import torch
++import yaml
++from torch.utils.data import DataLoader, TensorDataset
++
++sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from anywhere
++from exploratory.gradconc import PRIMARY_FRACTION, RULE_STEPS, decide, run_with_checkpoints  # noqa: E402
++
++COLUMNS = ["seed", "step", "mode", "fraction", "norm_share", "proj_share", "cos", "omitted", "loss_share",
++           "val_acc", "pool_loss", "n_batches"]
++
++
++def synthetic_loaders(batch_size, seed, n=6000):
++    """Plumbing test only: 10 Gaussian clusters in 784 dimensions."""
++    g = torch.Generator().manual_seed(0)
++    means = torch.randn(10, 784, generator=g) * 0.6
++
++    def make(n_, s):
++        gg = torch.Generator().manual_seed(s)
++        y = torch.randint(0, 10, (n_,), generator=gg)
++        return means[y] + torch.randn(n_, 784, generator=gg) * 3.0, y
++
++    x, y = make(n, 1)
++    xv, yv = make(1000, 2)
++    train = DataLoader(TensorDataset(x, y), batch_size=batch_size, shuffle=True,
++                       generator=torch.Generator().manual_seed(seed), drop_last=True)
++    return train, DataLoader(TensorDataset(xv, yv), batch_size=500)
++
++
++def summarize(rows, checkpoints, fractions):
++    def mean_over_seeds(mode, f, step, key):
++        v = [r[key] for r in rows if r["mode"] == mode and r["fraction"] == f and r["step"] == step]
++        return (float(np.mean(v)), float(np.min(v)), float(np.max(v)), len(v)) if v else (float("nan"),) * 3 + (0,)
++
++    f0 = PRIMARY_FRACTION
++    print(f"\n=== Top {int(f0 * 100)}% highest-loss examples (mean over seeds; [min, max]) vs a random {int(f0 * 100)}% ===")
++    print("step   val_acc | norm_share      | cos(top, full)  | proj_share | omitted | random: norm_share")
++    ns, cs = {}, {}
++    for s in checkpoints:
++        n = mean_over_seeds("top", f0, s, "norm_share")
++        c = mean_over_seeds("top", f0, s, "cos")
++        p = mean_over_seeds("top", f0, s, "proj_share")
++        o = mean_over_seeds("top", f0, s, "omitted")
++        a = mean_over_seeds("top", f0, s, "val_acc")
++        r = mean_over_seeds("random", f0, s, "norm_share")
++        ns[s], cs[s] = n[0], c[0]
++        print(f"{s:5d}  {a[0]:.4f} | {n[0]:.3f} [{n[1]:.2f},{n[2]:.2f}] | {c[0]:.3f} [{c[1]:.2f},{c[2]:.2f}] |   {p[0]:.3f}    |  {o[0]:.3f}  | {r[0]:.3f}")
++    print("\n=== Share of gradient norm vs fraction of examples kept (top by loss), per checkpoint ===")
++    print("step  " + "  ".join(f"top{int(f * 100):>3d}%" for f in fractions))
++    for s in checkpoints:
++        print(f"{s:5d} " + "  ".join(f"{mean_over_seeds('top', f, s, 'norm_share')[0]:7.3f}" for f in fractions))
++    verdict = decide(ns, cs)
++    print(f"\nPre-registered rule (steps {RULE_STEPS}): PROMISING if norm_share >= 0.80 and cos >= 0.90 at all three; "
++          f"DROP if norm_share < 0.60 at step 1000.\nVERDICT: {verdict}\n")
++    return verdict
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--config", default="configs/tuned/t1_base_two.yaml")
++    ap.add_argument("--seeds", type=int, nargs="+", default=[500, 501, 502])
++    ap.add_argument("--checkpoints", type=int, nargs="+", default=[100, 200, 500, 1000, 1500, 2000, 3000])
++    ap.add_argument("--fractions", type=float, nargs="+", default=[0.1, 0.2, 0.3, 0.5])
++    ap.add_argument("--batches", type=int, default=16, help="measurement batches per checkpoint")
++    ap.add_argument("--max-steps", type=int, default=None)
++    ap.add_argument("--tag", default="gc1")
++    ap.add_argument("--out", default=None)
++    ap.add_argument("--synthetic", action="store_true", help="plumbing test on synthetic data (no MNIST)")
++    args = ap.parse_args(argv)
++
++    cfg0 = yaml.safe_load(open(args.config))
++    if args.max_steps:
++        cfg0["max_steps"] = args.max_steps
++    cfg0["device"] = "cpu" if cfg0.get("device", "auto") == "auto" else cfg0["device"]
++    out = pathlib.Path(args.out or f"results/processed/gradient_concentration_{args.tag}.csv")
++    out.parent.mkdir(parents=True, exist_ok=True)
++
++    if not args.synthetic:
++        from src.data import get_data
++
++    rows = []
++    for seed in args.seeds:
++        cfg = {**cfg0, "seed": seed}
++        bs = cfg["batch_size"]
++        loader_fn = synthetic_loaders if args.synthetic else get_data
++        pool_loader, _ = loader_fn(bs, 10_000 + seed)                  # separate shuffling stream for the measurement pool
++        pool = [(x.clone(), y.clone()) for x, y in itertools.islice(iter(pool_loader), args.batches)]
++        train_loader, val_loader = loader_fn(bs, seed)
++        print(f"seed {seed}: training {cfg['max_steps']} steps, measuring at {args.checkpoints} "
++              f"on {len(pool)} fixed batches of {bs} training examples", flush=True)
++        r, _ = run_with_checkpoints(cfg, train_loader, val_loader, pool, args.checkpoints, args.fractions, cfg["device"])
++        rows.extend(r)
++
++    with open(out, "w", newline="") as fh:
++        w = csv.DictWriter(fh, fieldnames=COLUMNS, lineterminator="\n")
++        w.writeheader()
++        for r in rows:
++            w.writerow({k: r[k] for k in COLUMNS})
++    print(f"wrote {out}")
++    return summarize(rows, [c for c in args.checkpoints if c <= cfg0["max_steps"]], args.fractions)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/scripts_loader.py b/tests/scripts_loader.py
+new file mode 100644
+index 0000000..24380dc
+--- /dev/null
++++ b/tests/scripts_loader.py
+@@ -0,0 +1,11 @@
++"""Import a script from scripts/ by name (scripts/ is not a package)."""
++import importlib.util
++import pathlib
++
++
++def load_script(name):
++    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
++    spec = importlib.util.spec_from_file_location(name, path)
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++    return mod
+diff --git a/tests/test_gradient_concentration.py b/tests/test_gradient_concentration.py
+new file mode 100644
+index 0000000..f5b364c
+--- /dev/null
++++ b/tests/test_gradient_concentration.py
+@@ -0,0 +1,117 @@
++"""Tests for the exploratory gradient-concentration check (exploratory/gradconc.py)."""
++import itertools
++import math
++
++import torch
++import torch.nn.functional as F
++
++from exploratory.gradconc import (concentration, decide, measure_pool, per_example_grads,
++                                  run_with_checkpoints, subset_metrics)
++from scripts_loader import load_script
++from src.model import MeetNet
++
++CFG = dict(arm="base", seed=0, lr=1e-3, wd=1e-4, batch_size=32, max_steps=40, eval_every=10, act="relu",
++           lr_schedule="constant", warmup_steps=1, lam_aux=0.0, lam_inv=0.0, lam_meet=0.0)
++
++
++def clusters(n=1024, seed=0):
++    g = torch.Generator().manual_seed(7)
++    means = torch.randn(10, 784, generator=g) * 0.6
++    gg = torch.Generator().manual_seed(seed)
++    y = torch.randint(0, 10, (n,), generator=gg)
++    return means[y] + torch.randn(n, 784, generator=gg) * 3.0, y
++
++
++def loaders(seed=0):
++    from torch.utils.data import DataLoader, TensorDataset
++    x, y = clusters(1024, 1)
++    xv, yv = clusters(256, 2)
++    return (DataLoader(TensorDataset(x, y), batch_size=32, shuffle=True,
++                       generator=torch.Generator().manual_seed(seed), drop_last=True),
++            DataLoader(TensorDataset(xv, yv), batch_size=128))
++
++
++def test_per_example_grads_match_autograd():
++    torch.manual_seed(0)
++    m = MeetNet(arm="base")
++    x, y = clusters(8, 3)
++    flat, losses = per_example_grads(m, x, y)
++    assert flat.shape[0] == 8 and losses.shape == (8,)
++    for i in (0, 3, 7):
++        m.zero_grad()
++        F.cross_entropy(m(x[i:i + 1]), y[i:i + 1]).backward()
++        ref = torch.cat([p.grad.reshape(-1) for p in m.parameters()])
++        assert torch.allclose(flat[i], ref, atol=1e-6)
++
++
++def test_mean_of_per_example_grads_is_the_batch_gradient():
++    torch.manual_seed(0)
++    m = MeetNet(arm="base")
++    x, y = clusters(16, 4)
++    flat, _ = per_example_grads(m, x, y)
++    m.zero_grad()
++    F.cross_entropy(m(x), y).backward()
++    batch = torch.cat([p.grad.reshape(-1) for p in m.parameters()])
++    assert torch.allclose(flat.mean(0), batch, atol=1e-6)
++
++
++def test_subset_metrics_edge_cases():
++    g = torch.randn(20, 50)
++    losses = torch.rand(20)
++    full = subset_metrics(g, losses, torch.arange(20))
++    assert math.isclose(full["norm_share"], 1.0, rel_tol=1e-6) and math.isclose(full["cos"], 1.0, rel_tol=1e-5)
++    assert math.isclose(full["proj_share"], 1.0, rel_tol=1e-5) and full["omitted"] < 1e-5
++    # one dominant example: the subset containing it holds most of the norm and points the same way
++    g = torch.randn(20, 50) * 0.01
++    g[3] = 10 * torch.ones(50)
++    s = subset_metrics(g, torch.rand(20), torch.tensor([3]))
++    assert s["norm_share"] > 0.9 and s["cos"] > 0.95
++
++
++def test_random_subset_share_is_close_to_its_fraction():
++    torch.manual_seed(1)
++    g = torch.randn(4000, 20)
++    losses = torch.rand(4000)
++    gen = torch.Generator().manual_seed(0)
++    r = concentration(g, losses, [0.3], gen)[("random", 0.3)]
++    assert abs(r["norm_share"] - 0.3) < 0.03
++
++
++def test_high_loss_examples_carry_more_gradient_than_random_ones():
++    x, y = clusters(32, 5)
++    (train, val) = loaders(0)
++    pool = [(a, b) for a, b in itertools.islice(iter(train), 4)]
++    rows, model = run_with_checkpoints({**CFG, "max_steps": 60}, train, val, pool, [60], [0.3])
++    top = next(r for r in rows if r["mode"] == "top")
++    rnd = next(r for r in rows if r["mode"] == "random")
++    assert top["norm_share"] > rnd["norm_share"] + 0.05
++    assert 0.0 <= top["norm_share"] <= 1.0
++
++
++def test_measuring_does_not_change_training():
++    def final_params(measure):
++        train, val = loaders(0)
++        pool = [(a, b) for a, b in itertools.islice(iter(loaders(9)[0]), 3)]
++        _, model = run_with_checkpoints(CFG, train, val, pool, [10, 20, 30], [0.3, 0.5], measure=measure)
++        return [p.detach().clone() for p in model.parameters()]
++    a, b = final_params(True), final_params(False)
++    assert all(torch.equal(p, q) for p, q in zip(a, b))
++
++
++def test_decision_rule():
++    steps = (500, 1000, 2000)
++    assert decide({s: 0.85 for s in steps}, {s: 0.95 for s in steps}) == "PROMISING"
++    assert decide({s: 0.85 for s in steps}, {s: 0.80 for s in steps}) == "INCONCLUSIVE"   # concentrated but not aligned
++    assert decide({500: 0.7, 1000: 0.55, 2000: 0.6}, {s: 0.95 for s in steps}) == "DROP"
++    assert decide({500: 0.9, 1000: 0.7, 2000: 0.9}, {s: 0.95 for s in steps}) == "INCONCLUSIVE"
++
++
++def test_script_smoke_run(tmp_path):
++    mod = load_script("gradient_concentration")
++    out = tmp_path / "gc.csv"
++    verdict = mod.main(["--synthetic", "--seeds", "0", "--max-steps", "30", "--checkpoints", "10", "20", "30",
++                        "--batches", "2", "--tag", "smoke", "--out", str(out)])
++    assert verdict in ("PROMISING", "DROP", "INCONCLUSIVE")
++    lines = out.read_text().splitlines()
++    assert lines[0].startswith("seed,step,mode,fraction,norm_share")
++    assert len(lines) == 1 + 3 * 4 * 2          # 3 checkpoints x 4 fractions x (top, random)
+-- 
+2.43.0
+
