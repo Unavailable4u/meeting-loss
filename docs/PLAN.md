@@ -1,6 +1,6 @@
 # Plan
 
-**Last updated:** 2026-10-25 (selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
+**Last updated:** 2026-10-25 (Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 3 finished; the gate decision is open (see below)
 
@@ -8,7 +8,7 @@
 
 Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% more FLOPs than tuned arm A (97.5% intervals +26% to +47% and +27% to +44% at 0.97 and 0.975). **H6 is refuted:** deep supervision equals A at those targets (+2%). H2 and H5 were not tested (gated on H1). Gradient alignment of D is high (+0.75, H3 threshold met), so the null is not explained by a misaligned target. The gate row "No gain or worse" of `docs/GUIDE.md` Section 6 applies.
 
-**Side line (exploratory, 2026-10-25):** the selective backward pass (arm S) pilot, E-010, met its GO rule: S30 reached 0.97 and 0.975 at 0.63 and 0.61 of tuned A's FLOPs (3 seeds, random control worse than A; F-012). This is a lead, not a claim. D-021 (proposed) lists what must be decided before a pre-registered test; it does not replace the open gate decision D-020 below.
+**Side line (exploratory, 2026-10-25):** the selective backward pass (arm S) pilot, E-010, met its GO rule: S30 reached 0.97 and 0.975 at 0.63 and 0.61 of tuned A's FLOPs (3 seeds, random control worse than A; F-012). This is a lead, not a claim. D-021 (proposed) lists what must be decided before a pre-registered test; it does not replace the open gate decision D-020 below. **Update (2026-10-25):** Step 0 of the selective-backward preparation is settled: the regression check passed bit for bit under the Stage 3 thread setting (E-011 attempt 2; attempt 1 failed only because of the thread count), so the other runs of that note are no longer blocked; every new run uses one torch thread per process. D-022 (proposed, with the plan in `docs/notes/baseline-tunings-plan.md`) would run four further independent tunings of arm A (t5 to t8) to measure the baseline's tuning noise and fix the reference set for `prereg-v2`; its open items (number of tunings, the reference rule, whether B and S are tuned as often) are the researcher's.
 
 ## Next three actions
 

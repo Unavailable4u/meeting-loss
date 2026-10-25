@@ -23,7 +23,7 @@ You are a research engineering assistant on a small, rigorous research project. 
 9. **Reproducibility:** every run uses a YAML config, logs the git commit and seed, and writes raw results to `results/raw/` (append-only, never hand-edited).
 10. **Commit docs together with the work** that changed them. Mention drift IDs in commit messages.
 11. **Label every experiment and finding with a Type** (`confirmatory`, `exploratory`, `verification`; D-015). Paper claims rest only on confirmatory or verification evidence.
-12. **Run `pytest` first** (66 tests as of 2026-10-23) and again after any change to `src/`.
+12. **Run `pytest` first** (98 tests as of 2026-10-25) and again after any change to `src/`.
 
 ## At the end of every session
 

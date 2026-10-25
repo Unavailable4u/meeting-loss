@@ -61,6 +61,7 @@ In words:
 | What is the paper saying, and is every claim backed? | `paper/PAPER_DRAFT.md` and `paper/CLAIMS.md` |
 | One paper or two, and when would we split? | `paper/PAPER_PLAN.md` |
 | What mechanism checks and selective-backward preparation are planned, in what order, with what rules? | `docs/notes/mechanism-overview.md` (index of the planned checks) |
+| How are the further tunings of arm A (noise floor of the baseline, reference set for `prereg-v2`) planned? | `docs/notes/baseline-tunings-plan.md` (D-022, proposed) |
 | What other ideas could we try? | `docs/reference/02-brain-vs-model-comparison.md`, Section 8 |
 | What other parts of training could we work on later (loss, gradient computation, data, architecture)? | `docs/reference/01-proposal-and-starting-guide.md`, Section 3 (the lever table) and Section 9 (the backlog) |
 | What are the rules for running experiments fairly? | `docs/GUIDE.md`, Section 5 |
