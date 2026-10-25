@@ -56,6 +56,7 @@ Suggested working order: Step 0 of track S, then check A + L + G0, then the thre
 | Track S: `sel_frac` curve | 1210 to 1212 |
 | `prereg-v2` final (reserved) | 1300 to 1319 |
 
+- **Threads.** A comparison with earlier logs is only meaningful at the same torch thread count (E-011): the Stage 3 runs used `torch.set_num_threads(1)` in each worker. Every new runner or script that trains must set one thread by default (or record the thread count in the run header) and say so in its log entry.
 - **Tuning tags.** `t3` (check C), `t4` (check D); use `t5` for a fresh independent tuning of A in `prereg-v2`.
 - **Metric** where a comparison is made: steps-to-target and FLOPs-to-target under the D-018 rule (two consecutive evaluations at or above the target). A run that never reaches a target is recorded with its full-run steps and FLOPs and counted in `n_never`; never dropped. Targets 0.97 and 0.975 (C uses 0.95 and 0.97).
 - **Reference baselines:** both tunings of arm A (`t1_base_two.yaml` = A, `t2_base_two.yaml` = A2); fixed-hyperparameter designs (G0) remove tuning noise by construction and are conditional on A's tuned settings, which favour the baseline.
