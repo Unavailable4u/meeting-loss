@@ -1,6 +1,6 @@
 # Plan
 
-**Last updated:** 2026-10-26 (check G0 done: DOSE HARMS, E-013, F-014; DR-010; checks A and L done, E-012, F-013; D-020 accepted; Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
+**Last updated:** 2026-10-26 (checks G0, G1, G2 done: E-013 to E-015, F-014, F-015; DR-010; checks A and L done, E-012, F-013; D-020 accepted; Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 3 finished; the gate decision is open (see below)
 
@@ -12,7 +12,7 @@ Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% 
 
 ## Next three actions
 
-1. **Check G0 is done** (E-013, F-014): verdict DOSE HARMS at every dose tested (rho 0.1 to 3: +60% to +208% steps-to-target, with `h_var` blowing up); the grid skipped arm D's own effective dose (about 0.001). The follow-up plan is drafted in `docs/notes/mechanism-dose-follow-up.md` (G1: low doses; G2: same doses with a bounded middle state, tanh, to test whether the unbounded `h` caused the harm); the researcher approved it on 2026-10-26 and the code is built (tags `mr2` and `mr3`, 141 tests); the runs are next: `python scripts/run_dose_response.py --tag mr3 --workers 4 --threads 1`, then `--tag mr2`. Next in the order of `mechanism-overview.md`: the three looks of track S (wall-clock, small batch, `sel_frac` curve; not while a sweep is running), then checks B and D.
+1. **Checks G0, G1 and G2 are done** (E-013 to E-015, F-014, F-015): no dose of the learned meeting signal sped up training by 10% or more, in relu or in tanh; relu harms from rho 0.03 up, tanh is flat for rho 0.1 to 1 (alignment +0.8) and harms at rho 3. The signal is task-aligned but redundant with backpropagation at these settings, and Gate 3 of `mechanism-overview.md` stays closed. Next in the order of `mechanism-overview.md`: the three looks of track S (wall-clock, small batch, `sel_frac` curve; not while a sweep is running), then checks B and D. Check D (can the meeting signal replace part of backpropagation at lower cost?) is now the most informative of the two, because the additive use is exhausted; check B asks whether a better target changes that. A bounded-scale variant of the loss is deferred until B or D needs larger doses (`mechanism-dose-follow-up.md`, DECIDE 3).
 2. **Decide D-022** (further tunings of arm A, t5 to t8; open items: number of tunings, the reference baseline of H7, whether B and S are tuned as often) and D-021's open items before `prereg-v2` is written.
 3. Keep the figures and the paper draft in line with the evidence: `make_figures.py` is still to be written; C-15 and C-16 now rest on E-012 (exploratory, status weak). Checks A and L ended Q1 NOT REDUNDANT (probe caveat), Q2 NO, Q3 GN DIFFERS, L ALREADY SELECTIVE, so the hybrid arm is not added to `prereg-v2`.
 
