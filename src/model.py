@@ -8,6 +8,8 @@ Arms (docs/DECISIONS.md D-013):
   meet_ao      V2 meeting loss, augmented output: G also sees fixed random features of h
   meet_frozen  V3 meeting loss with a frozen random G and no inverse loss
   meet_grad    F  control: DTP-style exact-gradient target  h - eta * dL/dh
+  meet_rho        check G0 (D-020, docs/notes/mechanism-dose-response.md): learned G as in arm D, but the meeting
+                  signal's strength is set directly as rho times the task gradient at h (not a method: a dose)
 Variant V1 (noise in the inverse loss) is the config key `sigma_inv > 0` on meet / meet_ao.
 Control E (lower-layer learning-rate multiplier) is the config key `low_lr_mult` (see src/train.py).
 
@@ -18,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 MEET_ARMS = ("meet", "meet_ao", "meet_frozen")
-ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective")
+ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective", "meet_rho")
 
 
 def _act(name):
@@ -47,6 +49,9 @@ class MeetNet(nn.Module):
                 self.register_buffer("R", torch.randn(d_mid, d_aux) / d_mid ** 0.5)
             if arm == "meet_frozen":
                 self.G.requires_grad_(False)  # frozen random feedback network (no inverse loss)
+        elif arm == "meet_rho":
+            # same G as arm D (created after low and up, so the initial weights of low and up equal arm A's for a given seed)
+            self.G = nn.Sequential(nn.Linear(n_cls, d_hid), _act(act), nn.Linear(d_hid, d_mid))
         elif arm == "deepsup":
             self.aux = nn.Linear(d_mid, n_cls)
         elif arm == "ae":
@@ -77,7 +82,8 @@ def compute_losses(model, x, y, cfg, step):
     """Returns (total_loss, dict_of_parts, h, z).
 
     cfg keys used: lam_inv, lam_meet, warmup_steps (meet arms); lam_aux, aux_sched, aux_gamma,
-    max_steps (arms B, C); sigma_inv (V1); eta_hat (meet_grad). Missing optional keys default
+    max_steps (arms B, C); sigma_inv (V1); eta_hat (meet_grad); rho (required) and rho_warmup_steps
+    (default 200), lam_inv (meet_rho). Missing optional keys default
     to the values in docs/METHOD.md.
     """
     h = model.low(x)
@@ -113,6 +119,27 @@ def compute_losses(model, x, y, cfg, step):
 
         L_meet = F.mse_loss(h, b)                        # gradient reaches F_low only
         total = total + lam_inv * L_inv + cfg["lam_meet"] * ramp * L_meet
+        parts.update(inv=L_inv, meet=L_meet)
+
+    elif model.arm == "meet_rho":
+        # Check G0: the learned direction u_i = G(e_y) - G(p) (as in arm D), with the strength set explicitly.
+        #   L_meet = -rho * ramp * sum_i n_i * <u_i / ||u_i||, h_i>,   n_i = ||dL_task/dh_i|| (units of the mean loss)
+        # so the gradient at h_i has norm rho * ramp * n_i and points against u_i (descent moves h along u_i).
+        # u_i and n_i are constants; rows with p_y > 0.9999 get u_i = 0. G's only loss is L_inv (as in arm D).
+        ramp_rho = min(1.0, step / max(1, cfg.get("rho_warmup_steps", 200)))
+        h_d = h.detach()
+        p = z.detach().softmax(-1)
+        e_y = F.one_hot(y, model.n_cls).float()
+        gp = model.G(p)                                  # trained via L_inv
+        L_inv = F.mse_loss(gp, h_d)
+        with torch.no_grad():
+            u = model.G(e_y) - gp.detach()
+            u = torch.where(p.gather(1, y[:, None]) > 0.9999, torch.zeros_like(u), u)
+            u_hat = u / u.norm(dim=1, keepdim=True).clamp_min(1e-12)
+        g_h = torch.autograd.grad(parts["task"], h, retain_graph=True)[0]
+        n_i = g_h.norm(dim=1, keepdim=True).detach()
+        L_meet = -(cfg["rho"] * ramp_rho) * (n_i * u_hat * h).sum()
+        total = total + cfg["lam_inv"] * L_inv + L_meet
         parts.update(inv=L_inv, meet=L_meet)
 
     elif model.arm == "meet_grad":
