@@ -20,6 +20,7 @@ Three claims, of different kinds, if the plans go well: (1) a reproducible proto
 | `mechanism-a-direction-geometry.md` (check A) | Parallel/orthogonal split and Gauss-Newton cosine of the meeting signal | 3 runs of arm D, measurement only |
 | `linking-measurement-concentration.md` (check L) | E-009 concentration analysis on the meeting gradient (selected vs unselected rows) | shares A's runs, plus 3 runs of arm A |
 | `mechanism-dose-response.md` (check G0) | Fixed-hyperparameter dose-response of the learned loss, with rho (relative gradient norm) as the dose | 50 runs, no tuning |
+| `mechanism-dose-follow-up.md` (checks G1, G2; proposed) | What G0 left open: low doses (arm D's own dose) and a bounded middle state (tanh) | 100 runs, no tuning, awaiting go-ahead |
 | `mechanism-b-oracle-arm.md` (check B) | Oracle targets (pinv = Gauss-Newton, damped logit-space) plus the scaled-gradient control, cost ignored | oracle arms |
 | `mechanism-d-replacement-test.md` (check D) | Is the meeting signal sufficient to train the lower half with backprop cut? | replacement arms |
 | `mechanism-c-deep-network-sgd.md` (check C) | Deep plain MLP, SGD with momentum, against deep supervision | a small Stage-3-style study |
