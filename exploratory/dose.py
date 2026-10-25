@@ -1,4 +1,5 @@
-"""Check G0 (docs/notes/mechanism-dose-response.md, D-020): configs, scoring and decision rule of the dose-response.
+"""Checks G0, G1 and G2 (docs/notes/mechanism-dose-response.md, D-020; docs/notes/mechanism-dose-follow-up.md):
+configs, scoring and decision rules of the dose-response.
 
 Everything except the dose rho is fixed: arm A's tuned configuration (configs/tuned/t1_base_two.yaml) plus the
 learned inverse G of arm D (its tuned `lam_inv`), rho in {0, 0.1, 0.3, 1, 3} on seeds 1100 to 1109 (paired).
@@ -12,6 +13,11 @@ Decision rule (written before any run, steps-to-target, both targets must agree)
                decrease with rho for rho in {0.3, 1, 3}
   FLAT         every rho > 0 is within +-5% at both targets (point estimates) and its interval includes 0
   MIXED        anything else; also, when both HELPS and HARMS hold, MIXED (report the whole curve)
+
+Tags (TAGS): mr1 = G0 (relu, the rule above); mr2 = G1 (relu, low doses, rule `low`: LOW DOSE HELPS as HELPS above,
+LOW DOSE HARMS when rho = 0.03 is >= +10% at both targets and the point estimates do not decrease over
+{0.003, 0.01, 0.03} at either target, FLAT and MIXED as above); mr3 = G2 (tanh, the G0 doses and the G0 rule). The
+only difference between G2 and G0 is `act`.
 """
 import copy
 import glob
@@ -29,6 +35,19 @@ TARGETS = (0.97, 0.975)
 SEEDS = tuple(range(1100, 1110))
 RHO_WARMUP_STEPS = 200                       # fixed in the note, not tuned
 HELP_PCT, HARM_PCT, FLAT_PCT = 10.0, 10.0, 5.0
+TAGS = {
+    "mr1": dict(check="G0", act="relu", rhos=RHOS, seeds=SEEDS, rule="g0"),
+    "mr2": dict(check="G1", act="relu", rhos=(0.0, 0.001, 0.003, 0.01, 0.03), seeds=tuple(range(1110, 1120)), rule="low"),
+    "mr3": dict(check="G2", act="tanh", rhos=RHOS, seeds=tuple(range(1120, 1130)), rule="g0"),
+}
+
+
+def tag_spec(tag):
+    """Doses, seeds, activation and decision rule of a registered tag. An unregistered tag (plumbing tests, smoke runs)
+    behaves like G0; the runner refuses it for real runs."""
+    return TAGS.get(tag, TAGS["mr1"])
+
+
 A_CONFIG = "configs/tuned/t1_base_two.yaml"
 D_CONFIG = "configs/tuned/t1_meet_two.yaml"
 
@@ -47,11 +66,12 @@ def config_path(tag, rho):
 
 
 def build_config(rho, tag):
-    """Arm A's tuned config with arm meet_rho, the dose and arm D's tuned lam_inv. Nothing else is changed."""
+    """Arm A's tuned config with arm meet_rho, the dose and arm D's tuned lam_inv. Nothing else is changed, except the
+    activation for tag mr3 (check G2: tanh)."""
     cfg = copy.deepcopy(yaml.safe_load(open(ROOT / A_CONFIG)))
     lam_inv = yaml.safe_load(open(ROOT / D_CONFIG))["lam_inv"]
     cfg.update(stage=stage_name(tag, rho), arm="meet_rho", rho=float(rho), rho_warmup_steps=RHO_WARMUP_STEPS,
-               lam_inv=lam_inv, sigma_inv=0.0)
+               lam_inv=lam_inv, sigma_inv=0.0, act=tag_spec(tag)["act"])
     return cfg
 
 
@@ -82,28 +102,57 @@ def score(rows, target, crossing=DEFAULT_CROSSING):
     return rows[i]["step"], rows[i]["flops"], True
 
 
+def _helps(table):
+    t1, t2 = TARGETS
+    return any(all(table[r][t][0] <= -HELP_PCT and table[r][t][2] < 0 for t in (t1, t2)) for r in table if r > 0)
+
+
+def _flat(table):
+    t1, t2 = TARGETS
+    rhos = [r for r in table if r > 0]
+    return bool(rhos) and all(abs(table[r][t][0]) <= FLAT_PCT and table[r][t][1] <= 0 <= table[r][t][2]
+                              for r in rhos for t in (t1, t2))
+
+
 def decide(table):
     """table[rho][target] = (point, lo, hi) of the paired change of mean steps against rho = 0, in percent, for the
     doses rho > 0. Returns 'DOSE HELPS', 'DOSE HARMS', 'FLAT' or 'MIXED' (module docstring)."""
-    rhos = sorted(r for r in table if r > 0)
     t1, t2 = TARGETS
-    helps = any(all(table[r][t][0] <= -HELP_PCT and table[r][t][2] < 0 for t in (t1, t2)) for r in rhos)
     harms = False
     if all(r in table for r in (0.3, 1.0, 3.0)):
         big = all(table[r][t][0] >= HARM_PCT for r in (1.0, 3.0) for t in (t1, t2))
         mono = all(table[0.3][t][0] <= table[1.0][t][0] <= table[3.0][t][0] for t in (t1, t2))
         harms = big and mono
-    flat = bool(rhos) and all(abs(table[r][t][0]) <= FLAT_PCT and table[r][t][1] <= 0 <= table[r][t][2]
-                              for r in rhos for t in (t1, t2))
+    helps = _helps(table)
     if helps and harms:
         return "MIXED"
     if helps:
         return "DOSE HELPS"
     if harms:
         return "DOSE HARMS"
-    if flat:
-        return "FLAT"
-    return "MIXED"
+    return "FLAT" if _flat(table) else "MIXED"
+
+
+def decide_low(table):
+    """Rule of check G1 (docs/notes/mechanism-dose-follow-up.md). Returns 'LOW DOSE HELPS', 'LOW DOSE HARMS', 'FLAT'
+    or 'MIXED'."""
+    t1, t2 = TARGETS
+    harms = False
+    if all(r in table for r in (0.003, 0.01, 0.03)):
+        big = all(table[0.03][t][0] >= HARM_PCT for t in (t1, t2))
+        mono = all(table[0.003][t][0] <= table[0.01][t][0] <= table[0.03][t][0] for t in (t1, t2))
+        harms = big and mono
+    helps = _helps(table)
+    if helps and harms:
+        return "MIXED"
+    if helps:
+        return "LOW DOSE HELPS"
+    if harms:
+        return "LOW DOSE HARMS"
+    return "FLAT" if _flat(table) else "MIXED"
+
+
+RULES = {"g0": decide, "low": decide_low}
 
 
 def _diag(rows, after=1000):
@@ -112,8 +161,12 @@ def _diag(rows, after=1000):
     return dict(align=take("align"), h_var=take("h_var"), inv=take("inv"), final_acc=rows[-1]["val_acc"])
 
 
-def analyze(out_dir, tag, seeds=SEEDS, rhos=RHOS, n_boot=10000, boot_seed=0, crossing=DEFAULT_CROSSING):
-    """Read the runs, score them and apply the decision rule. Raises ValueError if any run is missing."""
+def analyze(out_dir, tag, seeds=None, rhos=None, n_boot=10000, boot_seed=0, crossing=DEFAULT_CROSSING):
+    """Read the runs, score them and apply the decision rule of the tag. Doses and seeds default to the tag's.
+    Raises ValueError if any run is missing."""
+    spec = tag_spec(tag)
+    seeds = tuple(spec["seeds"]) if seeds is None else tuple(seeds)
+    rhos = tuple(spec["rhos"]) if rhos is None else tuple(rhos)
     runs, missing = {}, []
     for rho in rhos:
         for s in seeds:
@@ -142,12 +195,12 @@ def analyze(out_dir, tag, seeds=SEEDS, rhos=RHOS, n_boot=10000, boot_seed=0, cro
             res["table"][rho][t] = paired_pct_change(ref_s, [x[0] for x in sc[(rho, t)]], n_boot=n_boot, seed=boot_seed)
             res["flops"][rho][t] = paired_pct_change([x[1] for x in sc[(0.0, t)]], [x[1] for x in sc[(rho, t)]],
                                                      n_boot=n_boot, seed=boot_seed)
-    res["verdict"] = decide(res["table"])
+    res["verdict"] = RULES[spec["rule"]](res["table"])
     return res
 
 
 def format_report(res, tag):
-    L = [f"check G0, tag {tag}: dose-response of the learned meeting loss, {len(res['seeds'])} paired seeds, "
+    L = [f"check {tag_spec(tag)['check']}, tag {tag}: dose-response of the learned meeting loss, {len(res['seeds'])} paired seeds, "
          f"steps-to-target (D-018 rule); change versus rho = 0 [95% bootstrap interval]"]
     L.append(f"{'rho':>5} {'target':>7} {'mean steps':>11} {'never':>5} {'change in steps':>26} {'change in FLOPs':>26}")
     for rho in res["rhos"]:
