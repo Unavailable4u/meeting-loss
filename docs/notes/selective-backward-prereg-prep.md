@@ -14,7 +14,7 @@ The pilot gives S30 about 0.61 of A's FLOPs-to-target, with a step ratio of abou
 
 **Regression check (E-002 style), proposed by DR-007.** Rerun one Stage 3 arm-A seed on the current code: `python -m src.train --config configs/tuned/t1_base_two.yaml --seed 0` and compare its validation curve with the raw log of `final-t1-base-two` seed 0. Rule (fixed now): **PASS** if the validation accuracy at every evaluation step is identical on the same machine and library versions, or, on different hardware or versions, differs by at most 0.002 at every evaluation and gives the same steps-to-target. Otherwise stop and find the cause before any further run. Record the result as a verification entry.
 
-**Log (2026-10-25):** attempt 1 ended FAIL by this rule (E-011). The rule is unchanged. The likely cause is a different torch thread count from the Stage 3 runs (`run_final.py` uses 1 thread per worker); the script now defaults to `--threads 1` for attempt 2. A second FAIL calls for the code-versus-environment control described in E-011.
+**Log (2026-10-25):** attempt 1 ended FAIL by this rule (E-011). The rule is unchanged. The likely cause is a different torch thread count from the Stage 3 runs (`run_final.py` uses 1 thread per worker); the script now defaults to `--threads 1` for attempt 2. A second FAIL calls for the code-versus-environment control described in E-011. **Update 2026-10-25:** attempt 2 with `--threads 1` PASSED bit-identically (E-011); Step 0 is done and the thread-count hypothesis is supported. The control is not needed.
 
 Then record D-020 and update D-021 (the open items) so the choices below have an owner.
 
