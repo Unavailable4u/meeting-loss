@@ -292,3 +292,83 @@ def test_runner_writes_logs_and_skips_finished_runs(tmp_path):
     first = next(tmp_path.glob("*rho0_meet_rho_s1100.jsonl"))
     header = json.loads(first.read_text().splitlines()[0])
     assert header["config"]["arm"] == "meet_rho" and "git_commit" in header and header["plan_group"] == "rho0"
+
+
+# ----------------------------------------------------------------------------- checks G1 and G2 (docs/notes/mechanism-dose-follow-up.md)
+def test_tag_table_for_g0_g1_g2():
+    t1, t2, t3 = dose.tag_spec("mr1"), dose.tag_spec("mr2"), dose.tag_spec("mr3")
+    assert (t1["act"], t1["rule"], tuple(t1["rhos"]), tuple(t1["seeds"])) == ("relu", "g0", dose.RHOS, tuple(range(1100, 1110)))
+    assert (t2["act"], t2["rule"], tuple(t2["rhos"]), tuple(t2["seeds"])) == \
+        ("relu", "low", (0.0, 0.001, 0.003, 0.01, 0.03), tuple(range(1110, 1120)))
+    assert (t3["act"], t3["rule"], tuple(t3["rhos"]), tuple(t3["seeds"])) == ("tanh", "g0", dose.RHOS, tuple(range(1120, 1130)))
+    blocks = [set(t["seeds"]) for t in (t1, t2, t3)]
+    assert not (blocks[0] & blocks[1]) and not (blocks[0] & blocks[2]) and not (blocks[1] & blocks[2])
+    assert all(min(b) >= 1100 and max(b) < 1200 for b in blocks)                  # final seeds 0-99 and track S (1200+) untouched
+    assert dose.rho_tag(0.001) == "0p001" and dose.rho_tag(0.03) == "0p03"
+    assert dose.tag_spec("smoke-x")["rule"] == "g0"                                # unknown tags behave like G0 (plumbing only)
+
+
+def test_g2_config_changes_only_the_activation_and_the_stage():
+    c1, c3 = dose.build_config(0.3, "mr1"), dose.build_config(0.3, "mr3")
+    assert c3["act"] == "tanh" and c1["act"] == "relu"
+    diff = {k for k in set(c1) | set(c3) if c1.get(k) != c3.get(k)}
+    assert diff == {"act", "stage"}
+    assert c3["stage"] == "dose-mr3-rho0p3"
+    c2 = dose.build_config(0.001, "mr2")
+    assert c2["act"] == "relu" and c2["rho"] == 0.001 and c2["stage"] == "dose-mr2-rho0p001"
+
+
+@pytest.mark.parametrize("tag", ["mr1", "mr2", "mr3"])
+def test_committed_configs_match_the_derivation_for_every_tag(tag):
+    for rho in dose.tag_spec(tag)["rhos"]:
+        path = dose.config_path(tag, rho)
+        assert path.exists(), path
+        assert yaml.safe_load(open(path)) == dose.build_config(rho, tag)
+
+
+def _lt(**by_rho):
+    return {float(k.replace("r", "").replace("_", ".")): {0.97: _p(v[0]), 0.975: _p(v[1])} for k, v in by_rho.items()}
+
+
+def test_decide_low_dose_rule():
+    helps = _lt(r0_001=(-12, -11), r0_003=(-3, -2), r0_01=(1, 2), r0_03=(2, 3))
+    helps[0.001][0.97] = (-12, -18, -6)
+    helps[0.001][0.975] = (-11, -17, -5)
+    assert dose.decide_low(helps) == "LOW DOSE HELPS"
+    weak = _lt(r0_001=(-12, -11), r0_003=(-3, -2), r0_01=(1, 2), r0_03=(2, 3))     # intervals +-3 around -12 are below 0 ...
+    weak[0.001][0.97] = (-12, -25, 2)                                                   # ... unless made to include 0
+    assert dose.decide_low(weak) == "MIXED"
+    harms = _lt(r0_001=(1, 2), r0_003=(4, 5), r0_01=(12, 14), r0_03=(25, 30))
+    assert dose.decide_low(harms) == "LOW DOSE HARMS"
+    not_monotone = _lt(r0_001=(1, 2), r0_003=(20, 21), r0_01=(12, 14), r0_03=(25, 30))
+    assert dose.decide_low(not_monotone) == "MIXED"
+    one_target = _lt(r0_001=(1, 2), r0_003=(4, 5), r0_01=(12, 14), r0_03=(25, 4))
+    assert dose.decide_low(one_target) == "MIXED"
+    flat = _lt(r0_001=(1, -2), r0_003=(2, 3), r0_01=(-3, 2), r0_03=(3, -1))
+    assert dose.decide_low(flat) == "FLAT"
+    both = _lt(r0_001=(-12, -11), r0_003=(4, 5), r0_01=(12, 14), r0_03=(25, 30))
+    both[0.001][0.97] = (-12, -18, -6)
+    both[0.001][0.975] = (-11, -17, -5)
+    assert dose.decide_low(both) == "MIXED"
+
+
+def test_analyze_uses_the_rule_of_the_tag(tmp_path):
+    seeds = list(range(1110, 1120))
+    spec = dose.tag_spec("mr2")
+    reach = {0.0: 1000, 0.001: 1000, 0.003: 1000, 0.01: 1500, 0.03: 2200}              # harm grows with the dose
+    for rho, r in reach.items():
+        stage = f"dose-mr2-rho{dose.rho_tag(rho)}"
+        for i, s in enumerate(seeds):
+            _write_run(tmp_path / f"20261026_{stage}_meet_rho_s{s}.jsonl", stage, "meet_rho", s,
+                       _fake_log(s, r + 50 * (i % 3)), rho)
+    res = dose.analyze(tmp_path, "mr2", n_boot=500)                                     # seeds and doses from the tag table
+    assert res["seeds"] == list(spec["seeds"]) and res["rhos"] == list(spec["rhos"])
+    assert res["verdict"] == "LOW DOSE HARMS"
+
+
+def test_runner_refuses_unknown_tags_for_real_runs(monkeypatch, tmp_path):
+    mod = load_script("run_dose_response")
+    monkeypatch.setattr(sys, "argv", ["run_dose_response.py", "--tag", "zz9", "--dry-run"])
+    with pytest.raises(SystemExit) as e:
+        mod.main()
+    assert "tag" in str(e.value)

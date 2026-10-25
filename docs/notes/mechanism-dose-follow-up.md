@@ -54,3 +54,11 @@ G0 gives one concrete, testable lead (the unbounded `h`), so it is right to foll
 1. **Go ahead with G1 and G2 as written?** (alternatives: only G2, since it tests the cause; or only G1.)
 2. **G1 doses:** include rho = 0.001 (arm D's effective dose, but only an estimate from F-013) or replace it with 0.03/0.1 overlap? Current: {0, 0.001, 0.003, 0.01, 0.03}.
 3. **After G2, if the bounded state fixes the harm:** do you want a designed variant (for example a meeting term bounded in `h`, or a penalty on the scale of `h`)? It would be a method change: it needs your decision, a note with its own rule, tuning under D-014, and a new pre-registered test. Not part of G1 or G2.
+
+## Decisions and implementation notes (2026-10-26)
+
+- **Researcher's decisions (2026-10-26):** G1 and G2 go ahead as written; rho = 0.001 stays in G1; the designed bounded-scale variant (DECIDE 3) is to be considered only after G2 has been read, with its own note and rule.
+- **Tags:** `mr1` = G0, `mr2` = G1, `mr3` = G2 (`exploratory/dose.py` `TAGS`: doses, seeds, activation and rule per tag; the runner refuses an unregistered tag for real runs). Configs: `configs/dose/mr2_rho*.yaml` and `mr3_rho*.yaml`, generated and checked against their derivation (G2's differ from G0's only in `act` and `stage`; a test checks this). Raw logs in `results/raw/dose/<tag>/`.
+- **G1 rule** is `decide_low` in `exploratory/dose.py`, as written above. "HARMS" needs rho = 0.03 at +10% or more at both targets and the point changes not decreasing over {0.003, 0.01, 0.03} at either target. HELPS and HARMS together give MIXED.
+- **No change under `src/`**: the arm, the losses and the FLOP counter are those of DR-010. Tests: `tests/test_dose.py` (the tag table and seed blocks, the G2 config, the G1 rule, analysis by the rule of the tag, the unknown-tag refusal; the existing rho = 0 reproduces arm A test already runs in tanh).
+- **Run order:** one tag at a time, not together (E-011: one torch thread per worker, laptop otherwise idle). Commands: `python scripts/run_dose_response.py --tag mr3 --workers 4 --threads 1` then `--tag mr2`. G2 first, because it tests the cause.
