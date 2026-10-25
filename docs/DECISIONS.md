@@ -202,10 +202,11 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 - Alternatives considered: stopping at the pilot; tuning S first (the rule says TUNE only when the verdict is not GO); going straight to the Stage 4 checks of D-020.
 - Consequences: a confirmatory test needs a new hypothesis in `docs/HYPOTHESES.md`, a lock tag, and an updated lock check in `scripts/run_final.py` (it is tied to `prereg-v1`). Until then every statement about arm S is conditional on the pilot's scope: 3 seeds, one MLP, A's hyperparameters, FLOPs not wall-clock (R-21 applies).
 - Evidence: E-009, E-010, F-012; `docs/notes/selective-backward-pilot.md`.
+- Note (2026-10-25): OPEN item (b) (the baseline) is addressed by D-022 (proposed); the other OPEN items stay open.
 
-## D-020: After Stage 3: keep both lines in one project and one paper; run the Stage 4 mechanism checks and the selective-backward preparation; proposed, nothing below is accepted until the researcher marks it
+## D-020: After Stage 3: keep both lines in one project and one paper; run the Stage 4 mechanism checks and the selective-backward preparation; accepted by the researcher on 2026-10-25
 - Date: 2026-10-25
-- Status: **proposed**. Drafted by the assistant for review. D-021 (selective backward) stays proposed and its OPEN items stay open until the preparation in `docs/notes/selective-backward-prereg-prep.md` is done.
+- Status: **accepted** by the researcher on 2026-10-25 (drafted by the assistant, accepted as written, on the assistant's recommendation; the text of the decision was not changed). D-021 (selective backward) and D-022 (baseline tunings) stay proposed and its OPEN items stay open until the preparation in `docs/notes/selective-backward-prereg-prep.md` is done.
 - Context: Stage 3 gave a pre-registered null result for the meeting loss (H1 refuted, E-008) and a null for deep supervision (H6 refuted). The gradient-concentration check (E-009) and the pilot of selective backward (E-010) are exploratory leads. Plans for the mechanism checks and the link measurement are in `docs/notes/mechanism-overview.md`.
 - Decision (proposed):
   1. **One project and one paper.** The two lines answer the same question under the same protocol and the claims do not strain each other (`paper/PAPER_PLAN.md`). Split only if a trigger written there happens.
@@ -215,6 +216,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 - Alternatives considered: stopping at the Stage 3 null; only the selective line; splitting into two papers now; the meeting-loss and selective-backward hybrid as a method (kept only as an optional exploratory arm, gated by check L).
 - Consequences: new notes under `docs/notes/`; changes under `src/` need drift entries; each check logs an `exploratory` experiment; the paper draft and claims register were restructured (DR-008).
 - Evidence: E-008, E-009, E-010, F-009 to F-012; `docs/notes/mechanism-overview.md`; `paper/PAPER_PLAN.md`.
+- Note (2026-10-25): accepted before the first mechanism run, as `docs/notes/mechanism-overview.md` requires. Accepting D-020 does not accept D-021 or D-022 and fixes no threshold or verdict rule; each check keeps the rule written in its own note.
 ## D-022: Reference baseline for `prereg-v2`: four further independent tunings of arm A (tags t5 to t8), selection runs only now; proposed, items marked OPEN are not decided
 - Date: 2026-10-25
 - Status: **proposed**. Drafted by the assistant for review; nothing below is accepted until the researcher marks it. It answers OPEN item (b) of D-021 and decision 2 of `docs/notes/selective-backward-prereg-prep.md`; it does not choose among the D-020 options. Numbered D-022 because D-020 and D-021 were already taken by other proposals when this was written.
