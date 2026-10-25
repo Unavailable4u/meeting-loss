@@ -68,3 +68,10 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: D-020 (proposed)
 - Docs updated: [ ] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS  [ ] LITERATURE (citations still to verify)  [ ] RISKS  [x] CLAIMS  [x] PAPER_DRAFT  [x] FIGURES
 - Experiments invalidated or needing rerun: none.
+## DR-009: Four further independent tunings of arm A proposed as the reference set for `prereg-v2` (proposed with D-022)
+- Date: 2026-10-25
+- Trigger: GUIDE Section 4 trigger 3 (baselines and tuning protocol: additional tuning passes), as a refinement of D-014 point 3 (re-tuning noise floor); not yet in force
+- What changed: before: two tunings of arm A (t1, t2); one fresh tuning (t5) planned for `prereg-v2` (prep note, decision 2). After, if D-022 is accepted: four further tunings (t5 to t8) selected under the unchanged D-017 and D-018 rules, a noise-floor outcome fixed in advance, and a reference-baseline choice for H7 left OPEN. No number of D-014, D-017, D-018 or D-019 changes, no Stage 3 result or config is touched.
+- Decision recorded: D-022 (proposed)
+- Docs updated: [x] PLAN  [ ] HYPOTHESES (H7 is not written yet)  [ ] METHOD  [x] DECISIONS  [x] EXPERIMENT_LOG (E-011 attempt 2, verification)  [ ] FINDINGS  [x] RISKS (R-21 mitigation)  [ ] CLAIMS  [ ] PAPER_DRAFT  [ ] FIGURES  [x] DOCUMENT_MAP, `docs/notes/baseline-tunings-plan.md`, CLAUDE.md (test count)
+- Experiments invalidated or needing rerun: none.
