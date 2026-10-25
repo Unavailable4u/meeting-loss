@@ -111,7 +111,7 @@ def run(cfg, device="cpu", data=None):
                 row = dict(step=step, flops=cum_flops, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),
                            **{k: v.item() for k, v in parts.items()})
-                if cfg["arm"] in MEET_ARMS or cfg["arm"] == "meet_grad":
+                if cfg["arm"] in MEET_ARMS or cfg["arm"] in ("meet_grad", "meet_rho"):
                     row["align"] = grad_alignment(model, x, y, cfg)
                     row["h_var"] = mid_state_variance(model, x)
                 log.append(row)

@@ -10,7 +10,7 @@ from src.diagnostics import grad_alignment
 from src.model import ARMS, MEET_ARMS, MeetNet, compute_losses
 from src.train import build_optimizer, lr_factors, run, steps_to_target
 
-CFG = dict(lam_inv=1.0, lam_meet=0.1, warmup_steps=1, lam_aux=0.3, eta_hat=0.1,
+CFG = dict(lam_inv=1.0, rho=1.0, rho_warmup_steps=1, lam_meet=0.1, warmup_steps=1, lam_aux=0.3, eta_hat=0.1,
            max_steps=100, lr=1e-3, wd=1e-4)
 
 

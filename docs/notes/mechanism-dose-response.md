@@ -66,3 +66,18 @@ Template. Check `scripts/run_final.py` for a runner pattern (and its lock logic)
 2. The gradient at `h` of `L_meet_rho` has per-example norm `rho * g_i` (compare against an explicit computation on a tiny batch).
 3. The meeting direction is detached: no gradient from `L_meet_rho` reaches `G` (G's only loss is `L_inv`).
 4. The FLOP counter's overhead for this arm equals the analytic count.
+
+## Implementation notes (2026-10-26, before the first run)
+
+Dated clarifications written while building the arm; none changes the idea, the doses, the seeds, the metric or the decision rule above.
+
+1. **Normalization of `g_i`.** `g_i` is the per-example norm of the gradient of the MEAN task loss with respect to `h` (`torch.autograd.grad(L_task, h)`), so the code is `L_meet_rho = -(rho * ramp) * sum_i g_i * <u_i/||u_i||, h_i>` with no extra `1/N`. The formula above writes `rho / N`, which would count the `1/N` twice; the stated intent ("gradient at `h_i` has norm `rho * g_i`") is what the code and the unit test implement.
+2. **`lam_inv`** is arm D's tuned value (0.105792, `configs/tuned/t1_meet_two.yaml`); `sigma_inv` is 0. `G` has the same shape as in arm D and is created after `low` and `up`, so the initial weights of `low` and `up` equal arm A's for a given seed (this is what makes `rho = 0` reproduce arm A).
+3. **Ramp key.** `rho_warmup_steps` (200) is a separate key, because arm A's config carries an unused `warmup_steps: 500`.
+4. **`rho` is required** (a missing key raises; there is no silent default).
+5. **Masking.** Rows with `p_y > 0.9999` get `u_i = 0` (and so no meeting gradient).
+6. **Rule overlap.** If DOSE HELPS and DOSE HARMS both hold, the verdict is MIXED. "Interval excluding 0" for HELPS means the upper end is below 0 at both targets. The FLAT and HARMS point-estimate conditions use the paired point estimate, as written.
+7. **Cost.** The analytic overhead is 44,564,480 FLOPs per step at batch 128 (G forward twice 18,087,936; G backward for `L_inv` 17,432,576; the extra backward of `L_task` to `h` 9,043,968), +28.7% over arm A (arm D: +22.9%, F-003). It is checked by a unit test and counted in FLOPs-to-target.
+8. **Tests** are in `tests/test_dose.py` (written first): `rho = 0` reproduces arm A bit for bit (relu and tanh); gradient norm at `h` equals `rho` times the task norm and points along `u`; confident rows get no meeting gradient; the ramp is linear and 0 at step 0; the meeting gradient reaches only `F_low`; the FLOP overhead matches the analytic count; the decision rule, the analysis and the runner.
+9. **Where the results go.** Raw logs in `results/raw/dose/<tag>/` (outside the Stage 3 globs), configs in `configs/dose/` (generated, checked against their derivation in `exploratory/dose.py`), table in `results/processed/dose_response_<tag>.csv`.
+10. **Not yet done:** the real-data regression check after the `src/` change (`scripts/verify_regression.py`, needs MNIST) and the real run. Both are run by the researcher; see DR-010.
