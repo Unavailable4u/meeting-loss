@@ -10,8 +10,15 @@ Rule (fixed in docs/notes/selective-backward-prereg-prep.md, Step 0, before the 
                             machine and library versions)
   PASS (within tolerance)   anything else that passes (expected across hardware or library versions)
 
-The rerun uses a temporary copy of the config with stage "verify-regression", so its log can never be
-mixed up with the Stage 3 final logs (analysis scripts select logs by stage name).
+The rerun uses a temporary copy of the config with stage "verify-regression-t<threads>", so its log can
+never be mixed up with the Stage 3 final logs (analysis scripts select logs by stage name) and a second
+attempt on the same day does not collide with the first (raw logs are never overwritten).
+
+Threads: the Stage 3 runs were made by scripts/run_final.py, which sets torch.set_num_threads(1) in every
+worker. The thread count changes the order of floating-point reductions inside matrix products, so a rerun
+with a different thread count is not bit-identical and drifts (the first attempt of this check, E-011, used
+torch's default thread count and failed the rule for that reason, as far as the logs show). --threads
+therefore defaults to 1, like run_final.py; --threads 0 keeps torch's default.
 
 Usage:
   python scripts/verify_regression.py                       # rerun arm A seed 0 and compare
@@ -96,20 +103,39 @@ def config_differences(old_header, new_header, ignore=("stage",)):
     return {k: (oc[k], nc.get(k)) for k in oc if k not in ignore and oc[k] != nc.get(k)}
 
 
-def rerun(config_path, seed):
+# Run src.train.main after fixing torch's intra-op thread count, as scripts/run_final.py does per worker.
+WRAPPER = (
+    "import sys, torch\n"
+    "cfg, seed, threads = sys.argv[1], sys.argv[2], int(sys.argv[3])\n"
+    "if threads > 0:\n"
+    "    torch.set_num_threads(threads)\n"
+    "sys.argv = ['train', '--config', cfg, '--seed', seed]\n"
+    "from src.train import main\n"
+    "main()\n"
+)
+
+
+def stage_name(threads):
+    return f"verify-regression-t{threads}"
+
+
+def train_command(config_path, seed, threads):
+    return [sys.executable, "-c", WRAPPER, str(config_path), str(seed), str(threads)]
+
+
+def rerun(config_path, seed, threads=1):
     import yaml  # imported here so the comparison functions work without it
     cfg = yaml.safe_load(open(config_path))
-    cfg["stage"] = "verify-regression"
+    cfg["stage"] = stage_name(threads)
     cfg["seed"] = seed
     with tempfile.TemporaryDirectory() as tmp:
         tmp_cfg = pathlib.Path(tmp) / "verify_regression.yaml"
         tmp_cfg.write_text(yaml.safe_dump(cfg))
-        subprocess.run([sys.executable, "-m", "src.train", "--config", str(tmp_cfg), "--seed", str(seed)],
-                       cwd=ROOT, check=True)
-    logs = sorted(glob.glob(str(ROOT / "results" / "raw" / f"*verify-regression_{cfg['arm']}_s{seed}.jsonl")),
+        subprocess.run(train_command(tmp_cfg, seed, threads), cwd=ROOT, check=True)
+    logs = sorted(glob.glob(str(ROOT / "results" / "raw" / f"*{stage_name(threads)}_{cfg['arm']}_s{seed}.jsonl")),
                   key=lambda p: pathlib.Path(p).stat().st_mtime)
     if not logs:
-        raise SystemExit("rerun finished but no verify-regression log was found in results/raw")
+        raise SystemExit("rerun finished but no verification log was found in results/raw")
     return logs[-1]
 
 
@@ -120,6 +146,8 @@ def main():
     ap.add_argument("--old-log", default=None, help="default: the Stage 3 final log of this arm and seed")
     ap.add_argument("--new-log", default=None, help="compare this existing log instead of rerunning")
     ap.add_argument("--tol", type=float, default=TOL_ACC)
+    ap.add_argument("--threads", type=int, default=1,
+                    help="torch intra-op threads for the rerun; 1 matches the Stage 3 runs (run_final.py), 0 = torch default")
     args = ap.parse_args()
 
     old_path = args.old_log
@@ -128,7 +156,9 @@ def main():
         if not found:
             raise SystemExit(f"no Stage 3 log for arm A seed {args.seed}; pass --old-log")
         old_path = found[0]
-    new_path = args.new_log or rerun(args.config, args.seed)
+    if args.new_log is None:
+        print(f"rerunning with torch threads = {args.threads if args.threads > 0 else 'default'}")
+    new_path = args.new_log or rerun(args.config, args.seed, args.threads)
 
     old_h, old_rows = load_log(old_path)
     new_h, new_rows = load_log(new_path)

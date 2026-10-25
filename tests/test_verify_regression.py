@@ -70,3 +70,16 @@ def test_config_differences_ignores_stage_and_new_keys():
     old = {"config": {"stage": "a", "lr": 0.1, "arm": "base"}}
     new = {"config": {"stage": "b", "lr": 0.2, "arm": "base", "sel_frac": 0.3}}
     assert vr.config_differences(old, new) == {"lr": (0.1, 0.2)}
+
+
+def test_stage_name_includes_the_thread_count():
+    assert vr.stage_name(1) == "verify-regression-t1"
+    assert vr.stage_name(0) != vr.stage_name(1)
+
+
+def test_train_command_fixes_threads_before_importing_train():
+    cmd = vr.train_command("cfg.yaml", 0, 1)
+    assert cmd[1] == "-c" and cmd[3:] == ["cfg.yaml", "0", "1"]
+    code = cmd[2]
+    assert code.index("set_num_threads") < code.index("from src.train import main")
+    assert "--seed" in code and "main()" in code
