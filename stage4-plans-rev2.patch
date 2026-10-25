@@ -1,0 +1,577 @@
+From 9e1d8539cc8f50c7a626a56072feed9d7fb70749 Mon Sep 17 00:00:00 2001
+From: Unavailable4u <noreply@example.com>
+Date: Sat, 24 Oct 2026 20:28:45 +0000
+Subject: [PATCH] Stage 4 plans, revision 2: linking measurement (L),
+ dose-response (G0), deferred G/cost note, selective-backward prereg prep
+
+- new notes: linking-measurement-concentration, mechanism-dose-response,
+  mechanism-g-and-cost-deferred, selective-backward-prereg-prep
+- check B: add damped logit-space oracle Q, explicit rho rationale, softer wording
+- check C: soften 'closes the line' wording, point to G0
+- overview rewritten: two studies, gates 0 to 3, track S, seed table
+Docs only; no code or locked paths changed. Plans written before any run (exploratory, D-015).
+---
+ .../linking-measurement-concentration.md      | 70 ++++++++++++++
+ docs/notes/mechanism-b-oracle-arm.md          | 21 +++--
+ docs/notes/mechanism-c-deep-network-sgd.md    |  6 +-
+ docs/notes/mechanism-dose-response.md         | 68 ++++++++++++++
+ docs/notes/mechanism-g-and-cost-deferred.md   | 66 +++++++++++++
+ docs/notes/mechanism-overview.md              | 92 +++++++++++-------
+ docs/notes/selective-backward-prereg-prep.md  | 94 +++++++++++++++++++
+ 7 files changed, 370 insertions(+), 47 deletions(-)
+ create mode 100644 docs/notes/linking-measurement-concentration.md
+ create mode 100644 docs/notes/mechanism-dose-response.md
+ create mode 100644 docs/notes/mechanism-g-and-cost-deferred.md
+ create mode 100644 docs/notes/selective-backward-prereg-prep.md
+
+diff --git a/docs/notes/linking-measurement-concentration.md b/docs/notes/linking-measurement-concentration.md
+new file mode 100644
+index 0000000..6ff44e9
+--- /dev/null
++++ b/docs/notes/linking-measurement-concentration.md
+@@ -0,0 +1,70 @@
++# Check L: linking measurement, is the meeting gradient already "selective"? (E-009 analysis applied to the meeting loss)
++
++**Status:** plan and decision rule, written BEFORE the first real run. Type: `exploratory`. Do not edit the rule after seeing results; if it needs to change, add a dated note below instead. Part of the mechanism study (`mechanism-overview.md`) and the link between the two studies: the meeting loss (refuted, E-008) and the selective backward pass (pilot GO, E-010).
++
++## The idea being checked
++
++The meeting loss did not help; selective backward did. One possible reason connects them: the meeting target is `h + G(e_y) - G(p)`, which is about `h` for any row the network already gets right, so the meeting gradient may live on the same high-loss rows that carry the task gradient (E-009: the top 30% of rows carry 98% to 99.7% of the gradient norm after about step 500). If so, the meeting loss supplies no signal where the task gradient is small, which would explain why it adds nothing next to backprop and why combining it with row selection cannot recover anything. If instead the meeting gradient is spread over low-loss rows, it carries a different kind of information and a hybrid becomes worth a look.
++
++This reuses the E-009 code and check A's runs; it needs almost no new training.
++
++## What is measured
++
++Train arm D (`configs/tuned/t1_meet_two.yaml`) **and** arm A (`configs/tuned/t1_base_two.yaml`) on seeds 600, 601, 602 (the same runs as check A; train once and measure everything in one pass). At steps 100, 200, 500, 1000, 1500, 2000 and 3000, on 16 fixed batches of 128 **training** examples (the E-009 protocol), define `Sel` = the top 30% of rows by per-example loss (`k = 39`, the S30 selection rule) and compute, with the E-009 definitions (check `exploratory/gradconc.py` for the exact norm-share and cosine):
++
++1. **Task gradient concentration on both models** (all parameters): norm share of `Sel` and cosine with the full gradient. On arm A this reproduces E-009; on arm D it checks that the finding is not specific to the baseline's trajectory.
++2. **Meeting gradient concentration on arm D** (lower-layer parameters, unscaled `L_meet`): norm share of `Sel`, the cosine of the `Sel`-only gradient with the full meeting gradient, and the share of the squared norm that lies in the unselected rows.
++3. **Row-level coupling:** the Spearman correlation across rows between the per-example loss and (a) the per-example norm of the meeting direction `||G(e_y) - G(p)||` and (b) the per-example norm of the task gradient at `h`.
++4. **Overlap:** on the unselected rows, the cosine between the meeting gradient and the task gradient (is the meeting signal pointing the same way where the task gradient is small?).
++
++Rows with `p_y > 0.9999` are kept (they are the point of the measurement) but reported separately as a share.
++
++Measuring never changes the training run (separate random generator; the same kind of test as `tests/test_gradient_concentration.py`).
++
++## Decision rule (mean over seeds, at steps 500, 1000 and 2000)
++
++The thresholds are judgment calls fixed now, before any data.
++
++- **ALREADY SELECTIVE:** the meeting gradient's norm share of `Sel` is at least 0.90 at all three steps **and** the loss correlation of `||G(e_y) - G(p)||` is at least 0.5 at all three steps. Reading: the meeting signal lives on the same rows as the task gradient, which supports the redundancy explanation and predicts that a hybrid adds nothing.
++- **NOT SELECTIVE:** the share is at most 0.60 at two of the three steps. Reading: a substantial part of the meeting gradient sits on rows the baseline already handles. Check whether it is signal or noise (use check A's parallel/orthogonal split on those rows) before drawing any conclusion.
++- **PARTIAL:** anything else.
++
++Descriptive and never deciding: the task-gradient share on arm D versus arm A (a difference above 0.05 is worth a line in the log), the share of `p_y > 0.9999` rows at each step, and the overlap cosine of item 4.
++
++## What each outcome leads to
++
++- **ALREADY SELECTIVE:** write it into the mechanism section as `exploratory`; do **not** add the hybrid arm to `prereg-v2` (it is predicted to be a null and would only clutter the paper).
++- **NOT SELECTIVE:** add the hybrid (meeting loss on the selected rows only) to `prereg-v2` as one clearly labeled *exploratory* arm with the expectation "null" written beforehand. It must not touch the primary hypothesis.
++- **PARTIAL:** report as is; the hybrid stays optional.
++
++## Cost accounting for the hybrid (analytic, for the record)
++
++If the meeting loss is applied only to the 39 selected rows, its overhead falls from about 23% of A's per-step FLOPs (E-008 accounting) to about `0.23 x 39/128` = 7.0% (about 10.9M FLOPs per step), **assuming the overhead scales linearly with the number of rows** (check with the FLOP counter before relying on it). The per-step cost of the hybrid would then be about 0.683 of A, which is 1.114 times S30's. Parity with S30 would need about 10% fewer steps than S30, whereas the meeting loss has only ever needed about 10% *more* steps than the baseline (E-008).
++
++## What this check can NOT show
++
++- Whether the hybrid helps: that needs an arm and a test. This is a measurement of where the gradient lives, not a causal result.
++- Anything beyond arm D at its tuned configuration (tanh, `lam_meet` = 0.005, where the meeting gradient is small next to the task gradient). Norm shares are scale-free, but the trajectory is dominated by backprop. Optionally repeat on the check B oracle (`P`) later; not part of the rule.
++- MNIST MLP, AdamW, one split.
++
++## Cost
++
++No extra training beyond check A (arm D on 3 seeds) plus 3 runs of arm A. Measurement is a few forward and backward passes per checkpoint. Time the smoke run first.
++
++## How to run (once the code exists)
++
++```
++python -m pytest -q
++git add -A && git commit -m "..." && git push                    # commit the plan BEFORE running
++python scripts/mechanism_check.py --tag ma1 --with-linking       # check A and check L in one pass (arms D and A, seeds 600-602)
++python scripts/mechanism_check.py --synthetic --max-steps 60 --checkpoints 20 40 60 --seeds 0 --tag smoke
++```
++
++Template; extend `scripts/mechanism_check.py` from check A with a `--with-linking` option (or write `scripts/linking_check.py`). Writes `results/processed/linking_ml1.csv`. Log an `exploratory` entry in `EXPERIMENT_LOG.md` with the printed verdict.
++
++## Tests to write first
++
++1. With `sel_frac = 1.0` the `Sel`-only gradient equals the full gradient (share 1.0, cosine 1.0).
++2. The row-restricted gradient equals the sum of the per-row gradients over `Sel` (check against per-example autograd on a tiny batch).
++3. On arm A the task-gradient norm share reproduces the E-009 values within noise for the same checkpoint.
++4. Measuring does not change the training log.
+diff --git a/docs/notes/mechanism-b-oracle-arm.md b/docs/notes/mechanism-b-oracle-arm.md
+index 0568993..7640a44 100644
+--- a/docs/notes/mechanism-b-oracle-arm.md
++++ b/docs/notes/mechanism-b-oracle-arm.md
+@@ -8,6 +8,10 @@ Every meeting-loss variant so far had an imperfect, learned `G`. If the signal w
+ 
+ It also repairs control F (R-19): F was nearly inert because its gradient was scaled by about `0.0016 * lam_meet`. Here the injected gradient is scaled **explicitly** relative to the task gradient.
+ 
++**Why rho and not `lam_meet`.** The tuned `lam_meet` of arm D is 0.005, the MSE loss is a mean over 128 dimensions (it divides the gradient by 128), and AdamW partly normalizes the scale of an added gradient. A tiny tuned `lam_meet` is therefore not a clean statement about the signal. So the strength is stated as `rho`, the gradient norm at `h` relative to the task gradient's, and the conclusion below is worded "no help in this setup", never "proven redundant".
++
++**Which output change the inverse is applied to (stated explicitly).** `P` works in **probability space** (`e_y - p`, through the softmax Hessian `S`, as `G` does); `N` is the Gauss-Newton step of the cross-entropy; `Q` is a damped least-squares inverse in **logit space** with the gradient step `e_y - p` as the logit change (no softmax weighting).
++
+ ## The arms (all additive next to normal backprop, F_low receives the extra gradient through h)
+ 
+ For each example `i` let `g_i = ||J_i^T r_i||` (the norm of the task gradient at h, in the units of the mean loss: divide by the batch size N) and let `u_i` be the oracle direction (definitions in check A; descent direction for h). Add the surrogate loss
+@@ -23,14 +27,15 @@ whose gradient at `h_i` has norm exactly `rho` times the task gradient's per-exa
+ | `F'` (scaled control) | `-J^T r` (backprop's own direction) | The pure rescale: the lower layers see `(1 + rho)` times backprop's gradient on h. Replaces F under SGD later (R-19). |
+ | `P` (pinv oracle) | `(S J)^+ (e_y - p)` | The meeting loss with a perfect local inverse `G`. |
+ | `N` (GN oracle) | `(J^T S J)^+ J^T (e_y - p)` | A Gauss-Newton direction (curvature-corrected). Skip if check A's Q3 is **BACKPROP ~ GN**. |
++| `Q` (damped logit-space oracle) | `J^T (J J^T + alpha I)^{-1} (e_y - p)`, `alpha_i = 0.01 * ||J_i||_F^2 / 10` | Damped least-squares inverse of the top half, equal to `(J^T J + alpha I)^{-1} J^T (e_y - p)` (compute the 10 x 10 form). `alpha` removes the instability of the pseudo-inverse where `J` is nearly singular. Robustness: also `alpha` x 10 and x 0.1 on seeds 700 to 702. |
+ 
+ Baselines: arm A (`t1_base_two.yaml`) and A2 (`t2_base_two.yaml`), both re-run on this check's seeds. The oracle arms use **arm A's tuned config unchanged** (relu, AdamW, cosine, `lr` 0.0013). That favours A (it was tuned, the oracle arms were not), so the phase 3 safeguard below exists.
+ 
+ ## Protocol
+ 
+-- **Phase 1 (screen).** `rho` in {0.3, 1, 3} for each of `F'`, `P`, `N` (9 arms) plus A, on seeds 700 to 702, 3,000 steps. For each type choose the `rho` with the lowest mean steps-to-0.97 (rule: two). No other tuning.
+-- **Phase 2 (test).** Seeds 710 to 719: A, A2, and `F'`, `P`, `N` at their chosen `rho` (50 runs).
+-- **Phase 3 (fair-shot safeguard, only if phase 2 would end NO HELP).** For the better of `P` and `N`, repeat phase 2 with `lr` multiplied by 0.5 and by 2 (everything else unchanged), on the same seeds (20 runs). The verdict is then taken over the best of the three learning rates for that arm, chosen on phase-2 seeds 710 to 714 and evaluated on 715 to 719. State this selection in the log.
++- **Phase 1 (screen).** `rho` in {0.3, 1, 3} for each of `F'`, `P`, `N`, `Q` (12 arms) plus A, on seeds 700 to 702, 3,000 steps. (The dose-response of the *learned* loss is check G0, `mechanism-dose-response.md`, which should be run first.) For each type choose the `rho` with the lowest mean steps-to-0.97 (rule: two). No other tuning.
++- **Phase 2 (test).** Seeds 710 to 719: A, A2, and `F'`, `P`, `N`, `Q` at their chosen `rho` (60 runs).
++- **Phase 3 (fair-shot safeguard, only if phase 2 would end NO HELP).** For the best of `P`, `N` and `Q`, repeat phase 2 with `lr` multiplied by 0.5 and by 2 (everything else unchanged), on the same seeds (20 runs). The verdict is then taken over the best of the three learning rates for that arm, chosen on phase-2 seeds 710 to 714 and evaluated on 715 to 719. State this selection in the log.
+ 
+ The metric is **steps-to-target** (cost is ignored here) at 0.97 and 0.975 under the D-018 rule; FLOPs-to-target is reported for reference.
+ 
+@@ -38,14 +43,14 @@ The metric is **steps-to-target** (cost is ignored here) at 0.97 and 0.975 under
+ 
+ The 10% margin is about the break-even of the cheapest meeting variants (+12% FLOPs per step needs about 11% fewer steps), so a smaller step gain could not pay for a real `G`.
+ 
+-- **ORACLE HELPS:** for `P` or `N`, at both targets the point estimate is at most -10% against A **and** against A2, the interval against A excludes 0, **and** the point estimate is at least 5 points below that of `F'`.
+-- **NO HELP:** for both `P` and `N` (after phase 3), at both targets the lower end of the interval against A is above -10% (the interval excludes a 10% gain).
++- **ORACLE HELPS:** for `P`, `N` or `Q`, at both targets the point estimate is at most -10% against A **and** against A2, the interval against A excludes 0, **and** the point estimate is at least 5 points below that of `F'`.
++- **NO HELP (in this setup):** for every oracle type that was run (after phase 3), at both targets the lower end of the interval against A is above -10% (the interval excludes a 10% gain).
+ - **INCONCLUSIVE:** anything else. Do not add seeds to the same test (D-019 point 2). With 10 seeds a true -10% change often ends INCONCLUSIVE (E-007: at a 15% margin only about half of the simulations at a true -15% came out supported), so INCONCLUSIVE is not evidence of no effect.
+ 
+ ## What each outcome leads to
+ 
+-- **HELPS:** the information is in the direction, not only in the scale. Plan a confirmatory test and then look at cheaper approximations of `P`/`N` (a low-rank `G`, updating `G` every k steps). Cost must stay under about 5% per step to leave room.
+-- **NO HELP:** close the line: even a perfect local inverse or a curvature step adds nothing next to backprop in this setup. Together with check A this is the strongest form of the mechanism result.
++- **HELPS:** the information is in the direction, not only in the scale. Plan a confirmatory test and then the deferred note `mechanism-g-and-cost-deferred.md` (the gate there gives the required step reduction for each overhead).
++- **NO HELP:** no support for the signal in this setup: even a perfect local inverse, a curvature step or a damped logit-space inverse adds nothing measurable next to backprop at A's tuned settings. Together with check A and check G0 this is the strongest form of the mechanism result; it is not a proof of redundancy (one network, one optimizer, 3,000 steps, 10 seeds).
+ - **INCONCLUSIVE:** report it as such; run check C (deep network, SGD), where an effect is more likely, before deciding.
+ - If `F'` beats A: the gain is about scale, not direction; report it and note that it is equivalent to a lower-layer learning-rate change (control E).
+ 
+@@ -58,7 +63,7 @@ The 10% margin is about the break-even of the cheapest meeting variants (+12% FL
+ 
+ ## Code needed
+ 
+-- Arm keys `meet_oracle_{grad,pinv,gn}` in `src/model.py` / `compute_losses` (config keys `oracle_type`, `oracle_rho`), implemented with the closed-form Jacobian from check A.
++- Arm keys `meet_oracle_{grad,pinv,gn,logit}` in `src/model.py` / `compute_losses` (config keys `oracle_type`, `oracle_rho`), implemented with the closed-form Jacobian from check A.
+ - A regression test: with `rho = 0` every oracle arm reproduces arm A's log bit for bit; `F'` with `rho` equals arm A with the lower-layer gradient scaled by `(1 + rho)` (check against a direct hook).
+ - `configs/stage4_oracle_plan.yaml` listing groups and seeds, with the same lock logic as `scripts/run_final.py` (tag `prereg-v2` before phase 2).
+ 
+diff --git a/docs/notes/mechanism-c-deep-network-sgd.md b/docs/notes/mechanism-c-deep-network-sgd.md
+index 3c120a0..6384ba8 100644
+--- a/docs/notes/mechanism-c-deep-network-sgd.md
++++ b/docs/notes/mechanism-c-deep-network-sgd.md
+@@ -4,7 +4,7 @@
+ 
+ ## The idea being checked
+ 
+-The meeting loss was sold as a **shorter signal path** to the lower layers. In the current 784-256-128-256-10 MLP the path from the output to the middle state is only two weight layers, so there is almost nothing to shortcut. Gains from a shortcut should appear where backprop's own signal degrades: a deep plain network (no residuals, no normalization). Two further limits of E-008 are covered at the same time: H4's optimizer requirement (AdamW normalizes the scale of an added gradient; SGD with momentum does not, R-19) and the comparison with **deep supervision (arm B)**, which gives the lower layers the same kind of shortcut. The meeting loss must beat B here to be interesting.
++The meeting loss was sold as a **shorter signal path** to the lower layers. In the current 784-256-128-256-10 MLP the path from the output to the middle state is only two weight layers, so there is almost nothing to shortcut. Gains from a shortcut should appear where backprop's own signal degrades: a deep plain network (no residuals, no normalization). Two further limits of E-008 are covered at the same time: H4's optimizer requirement (AdamW normalizes the scale of an added gradient; SGD with momentum does not, R-19) and the comparison with **deep supervision (arm B)**, which gives the lower layers the same kind of shortcut. The meeting loss must beat B here to be interesting. The strength of the signal is a tuned `lam_meet` here (wide range, because scale matters under SGD); the normalized dose `rho` is the subject of check G0 (`mechanism-dose-response.md`) and can be added as a second D arm if G0 shows a dose effect.
+ 
+ ## Setting
+ 
+@@ -31,7 +31,7 @@ A, B, D, `F'`, A2 on 10 seeds each (50 runs). Tag `prereg-v3` before the first f
+ ## Decision rule (D vs A and D vs B; paired percentage change of mean FLOPs-to-target, same bootstrap as D-019 with a 97.5% interval because two comparisons share the error budget; both targets must agree)
+ 
+ - **SUPPORTED:** D vs A is *supported* under the D-019 rule (point at most -15%, interval excludes 0, gain larger than the A2-versus-A shift) at both targets, **and** D vs B has a point estimate below 0 with the interval excluding 0 at both targets.
+-- **REFUTED:** D vs A is *refuted* under the D-019 rule (the interval excludes a 15% gain) at both targets, whatever B does.
++- **REFUTED (does not support the premise in this setup):** D vs A is *refuted* under the D-019 rule (the interval excludes a 15% gain) at both targets, whatever B does. One exploratory design cannot prove a negative; read this label as "no support here".
+ - **INCONCLUSIVE:** anything else.
+ 
+ Descriptive and never deciding: `F'` (is the effect only a rescale?), steps-to-target and the final accuracy, the per-layer gradient norms of every arm, the share of runs that never reach a target, A2's shift.
+@@ -39,7 +39,7 @@ Descriptive and never deciding: `F'` (is the effect only a rescale?), steps-to-t
+ ## What each outcome leads to
+ 
+ - **SUPPORTED:** the premise holds where backprop is weak. Write a new pre-registered confirmatory test on fresh seeds (D-015); do not claim it from this check.
+-- **REFUTED:** the signal does not help even where backprop is weak, in this setup. Together with B this closes the line for plain MLPs.
++- **REFUTED:** no support for the premise even where backprop is weak, in this setup. Together with B and G0 this is evidence against the premise for plain MLPs; it is not proof, and `G` mirroring `F_up` is one design among several.
+ - **INCONCLUSIVE:** report as such. If B beats A and D does not, report that deep supervision is the shortcut that works here (and that H6 gets a second, independent look).
+ - **Probe says the weak-backprop premise could not be met:** the result applies only to the depth tested; say so in the paper.
+ 
+diff --git a/docs/notes/mechanism-dose-response.md b/docs/notes/mechanism-dose-response.md
+new file mode 100644
+index 0000000..e83b5b7
+--- /dev/null
++++ b/docs/notes/mechanism-dose-response.md
+@@ -0,0 +1,68 @@
++# Check G0: fixed-hyperparameter dose-response of the learned meeting loss (paired seeds, rho as the dose)
++
++**Status:** plan and decision rule, written BEFORE the first real run. Type: `exploratory`. Do not edit the rule after seeing results; if it needs to change, add a dated note below instead. Part of the mechanism study (`mechanism-overview.md`), Gate 0 (cheap, no new network structure).
++
++## The idea being checked
++
++E-008 compared tuned configurations, and tuning noise between two tunings of the same baseline was 17% to 34% (F-011). That makes it hard to separate "the meeting loss does nothing" from "the tuner picked a different configuration". A dose-response with **everything fixed except the dose** removes tuning noise by construction: same network, same optimizer, same schedule, same seeds, only the strength of the meeting signal changes.
++
++The usual dose, `lam_meet`, is hard to interpret here: the tuned value is 0.005, the MSE loss is a mean over 128 dimensions (it divides the gradient by 128), and AdamW partly normalizes the scale of an added gradient. So the dose is defined directly as **rho, the norm of the meeting gradient at h relative to the task gradient at h**, per example.
++
++## The arm `meet_rho` (learned G, normalized strength)
++
++`G` is trained exactly as in arm D (inverse loss `L_inv`, same `lam_inv`). The meeting direction is the learned one, `u_i = G(e_y) - G(p)` (detached). The meeting signal reaching `F_low` is
++
++```
++L_meet_rho = -(rho / N) * sum_i  g_i * <u_i / ||u_i||, h_i>        # u_i, g_i detached
++```
++
++where `g_i = ||dL_task/dh_i||` in the units of the mean loss (the same normalization as the oracle arms of check B), so the gradient at `h_i` has norm `rho * g_i` and points along the learned direction. Obtain `g_i` from one extra `torch.autograd.grad(L_task, h, retain_graph=True)`. Examples with `p_y > 0.9999` get `u_i = 0`. `rho` ramps linearly from 0 to its value over the first 200 steps (fixed now, not tuned); `G` is trained from step 0.
++
++## Design
++
++- **Fixed:** arm A's tuned configuration (`configs/tuned/t1_base_two.yaml`: relu, AdamW, cosine schedule, `lr` 0.0013, `wd` 0.00013, batch 128, 3,000 steps). Nothing is tuned in this check.
++- **Dose:** rho in {0, 0.1, 0.3, 1, 3}. `rho = 0` must reproduce arm A's validation curve exactly (unit test): `G` is trained but never reaches `F_low`.
++- **Seeds:** 1100 to 1109 (new), the same seeds in every group (paired). 5 doses x 10 seeds = 50 runs; the `rho = 0` group doubles as the reference, so no separate A runs are needed.
++- **Metric:** steps-to-target at 0.97 and 0.975 under the D-018 rule, and FLOPs-to-target (the `G` overhead is real and counted as in arm D). Paired percentage change versus `rho = 0`, 95% bootstrap interval (`src/sweep.py`); both targets must agree, as D-019. A run that never reaches a target is charged its full-run steps and FLOPs and counted in `n_never`.
++- **Also log:** alignment with the task gradient at `F_low` (the H3 diagnostic) at each dose, and `h_var` and the inverse loss (the V2 warning signs seen in the Stage 2 diagnostics).
++
++## Decision rule (steps-to-target; the 10% margin is about the break-even of the cheapest variants, see `mechanism-g-and-cost-deferred.md`)
++
++- **DOSE HELPS:** at least one `rho > 0` has a paired mean change of at most -10% at both targets with the interval excluding 0.
++- **DOSE HARMS:** the change is at least +10% at both targets for `rho = 1` and for `rho = 3`, and the point estimates do not decrease with `rho` for `rho >= 0.3`.
++- **FLAT:** at every `rho > 0` the change is within +-5% at both targets and the interval includes 0.
++- **MIXED:** anything else (report the full curve).
++
++## What each outcome leads to
++
++- **DOSE HELPS:** the signal is useful once its strength is set sensibly; the E-008 failure was partly a scale problem. Then check B's oracle arms become much more interesting, and a confirmatory design is warranted (new seeds, pre-registered, fixed reference baseline).
++- **DOSE HARMS or FLAT:** consistent with E-008 and with redundancy; strengthens the negative result with a design that does not depend on the tuner. Continue to Gate 1 (check B) only if you want the oracle bound.
++- **MIXED:** report the curve; do not tune.
++
++## What this check can NOT show
++
++- Anything about a better `G` (the direction is the learned one, not an oracle; check B covers that).
++- Anything about other optimizers or networks (check C covers SGD and depth).
++- The result is conditional on **arm A's tuned settings**, which favour `rho = 0` (they were tuned for the baseline). A null here says "no help at these settings", not "no help at any".
++- Ten seeds can detect a change of about 10% only about half the time (E-007 simulations at 15%: roughly half came out supported), so INCONCLUSIVE-like outcomes (MIXED) are not evidence of no effect.
++
++## Cost
++
++50 runs of 3,000 steps with a slightly slower step than arm D (one extra gradient). About the size of the Stage 3 test of one arm pair times 2.5; time one run first.
++
++## How to run (once the code exists)
++
++```
++python -m pytest -q                     # includes: rho = 0 reproduces arm A
++git add -A && git commit -m "..." && git push        # BEFORE the runs
++python scripts/run_dose_response.py --tag mr1        # rho in {0, 0.1, 0.3, 1, 3}, seeds 1100-1109
++```
++
++Template. Check `scripts/run_final.py` for a runner pattern (and its lock logic). Log as an `exploratory` entry in `EXPERIMENT_LOG.md`.
++
++## Tests to write first
++
++1. `rho = 0` reproduces arm A's validation curve step for step.
++2. The gradient at `h` of `L_meet_rho` has per-example norm `rho * g_i` (compare against an explicit computation on a tiny batch).
++3. The meeting direction is detached: no gradient from `L_meet_rho` reaches `G` (G's only loss is `L_inv`).
++4. The FLOP counter's overhead for this arm equals the analytic count.
+diff --git a/docs/notes/mechanism-g-and-cost-deferred.md b/docs/notes/mechanism-g-and-cost-deferred.md
+new file mode 100644
+index 0000000..0a7965a
+--- /dev/null
++++ b/docs/notes/mechanism-g-and-cost-deferred.md
+@@ -0,0 +1,66 @@
++# Deferred: fixing G's quality and the meeting loss's cost (Gate 3), only after a step reduction has been shown
++
++**Status:** plan, written BEFORE any run, and **blocked by gates**: do not start any item here until the gate below is met. Type: `exploratory`. Part of the mechanism study (`mechanism-overview.md`).
++
++## Why this is deferred
++
++Every item here makes a meeting-loss variant better or cheaper. That is only worth doing if some version of the signal reduces the *number of steps* at all. E-008 showed the opposite (D needs about 10% more steps than A), so cheaper machinery only makes a loser cost less. The earlier checks decide whether a step reduction exists:
++
++- **Check G0** (dose-response, learned G): DOSE HELPS.
++- **Check B** (oracle arms): ORACLE HELPS.
++- **Check C** (deep network, SGD): SUPPORTED.
++- **Check D**: R2 (oracle replacement) sufficient while R1 (learned G) is not, which says `G`'s quality is the bottleneck.
++
++**Gate (all of the following):** at least one of G0, B or C ends with the helpful outcome above **and** the step reduction against arm A is large enough to pay for the overhead. With the 0.85 FLOPs-ratio line (the GO line of the pilot) and per-step overheads relative to A, the paired steps ratio vs A must be at most:
++
++| Overhead per step (vs A) | Required steps ratio vs A | Meaning |
++|---|---|---|
++| +23% (arm D as is) | 0.69 | 31% fewer steps |
++| +12% (frozen G) | 0.76 | 24% fewer steps |
++| +6% (a lazy k = 4 variant, estimate) | 0.80 | 20% fewer steps |
++
++(0.85 divided by 1 + overhead; the warm-up phase is ignored.) If no check reaches these, **stop here**: the mechanism result is the contribution.
++
++## Part 1: fixing G's quality (items G1 and G2)
++
++**G1. Domain mismatch (the one-hot versus softmax query).** `G` is trained on softmax outputs `p` and queried on the one-hot `e_y`. Query instead at a smoothed point `e_y_tilde = (1 - eps) e_y + eps/K` (or at temperature-scaled logits), so the query stays inside the region where `G` has seen data. Notes:
++- `eta_hat` in the configs belongs to **control F** (the exact-gradient target step), not to a query shrink, so this is a new option, not an existing one (checked in METHOD).
++- Smoothing also shrinks `G(e_y) - G(p)`, so it changes the signal's **magnitude** as well as its domain. Always compare at a normalized strength (rho of check G0), not at a fixed `lam_meet`.
++
++**G2. Stabilizing the inverse.** The V2 warning signs (`h_var` rising from 4 to 58 and the inverse loss from 1.6 to 41 in short runs) come from one variant, in short runs, and have not been shown to cause the large-`lam_meet` failures. Try in this order, one at a time:
++1. a smaller learning rate for `G` (`g_lr_mult`), gradient clipping on `G`, weight decay on `G`;
++2. only then normalization of `h` (LayerNorm or L2).
++
++Cautions:
++- **Normalizing `h` changes the baseline's dynamics too**, so arm A must get the same layer, otherwise the comparison is confounded.
++- **Spectral normalization or a Lipschitz bound on `G` conflicts with what an inverse does**: inverting a layer with small singular values needs a large gain (about `1/sigma`), so the constraint can cripple exactly the part that makes `G` useful. Treat it as a last resort and test it against a version without it.
++
++## Part 2: reducing the cost (items C1 to C3)
++
++- **C1. Lazy application.** Apply the meeting gradient and update `G` every `k` steps (for example `k` = 4 or 5). Most direct, and the first thing to try.
++- **C2. Smaller `G`.** Reduce the hidden width of `G`. Low rank buys little (its input is already 10-dimensional, so rank 10 at most). A **linear `G` is a weak test**: it cannot depend on the state, so it behaves like a learned feedback matrix, which the frozen-`G` variant already resembles.
++- **C3. Fewer rows.** Apply the meeting loss only to the rows selected for backward (the hybrid; see `linking-measurement-concentration.md` for the cost and the rule that decides whether to try it).
++
++## Decision rule for each fix (judged against the gate above, with the helpful check's oracle as the ceiling)
++
++For a fix `X` evaluated in the setting where the gate was met (paired seeds, steps-to-target at both targets):
++
++```
++gap_closed(X) = (steps(D) - steps(X)) / (steps(D) - steps(oracle))
++```
++
++- **PROMISING:** `gap_closed >= 0.5` at both targets **and** the steps ratio vs A is at or below the required value in the table for that variant's overhead.
++- **DROP:** `gap_closed < 0.25` at either target, or the required steps ratio is not reached.
++- **MIXED:** anything else (report).
++
++Limits: at most 3 variants per stage (a standing rule of this project) and a decision entry before they run; each variant needs its own seeds and a written rule before its first run.
++
++## What this can NOT show
++
++- It is only meaningful if the oracle helps (`steps(oracle) < steps(D)`); otherwise `gap_closed` is undefined and the whole line is closed.
++- It does not tell you whether the combination of fixes works (they are tested one at a time).
++- MNIST MLP unless the gate was met by check C.
++
++## If the gate is not met
++
++Close the line for this setup in `FINDINGS` as a mechanism result (A, G0, B, D, C together) and write it up. Do not run this note.
+diff --git a/docs/notes/mechanism-overview.md b/docs/notes/mechanism-overview.md
+index bc97cad..2f9da10 100644
+--- a/docs/notes/mechanism-overview.md
++++ b/docs/notes/mechanism-overview.md
+@@ -1,35 +1,50 @@
+-# Mechanism study (Stage 4 diagnostics): overview of checks A, B, C and D
++# Mechanism study (Stage 4 diagnostics): overview, gates and how it fits the two studies
+ 
+-**Status:** plan, written BEFORE any run. Type: `exploratory` for all four checks (D-015). Do not edit a decision rule after seeing results; add a dated note below instead.
++**Status:** plan, written BEFORE any run. Type: `exploratory` for every check (D-015). Do not edit a decision rule after seeing results; add a dated note below instead. Revised after the pilot of the selective backward pass (E-010): the project is now organised as one paper with two studies and a shared protocol.
+ 
+-## Why these four checks
++## The two studies and what links them
+ 
+-E-008 refuted H1: the meeting loss needs about 36% more FLOPs than the tuned baseline, and it also needs about 10% more *steps*. H3 shows its gradient is aligned with the task gradient (about +0.75). The working explanation is **redundancy**: a correct signal that backprop already supplies adds nothing (problem 1 in our problem list; not yet an entry in RISKS.md). That explanation is an interpretation, not a tested mechanism. These four checks test it from four sides.
++| Study | Status | Role |
++|---|---|---|
++| 1. Meeting loss (arm D) | Done: H1 and H6 refuted (E-008, pre-registered, confirmatory) | The negative control: it shows the protocol can say no. The mechanism checks below explain *why*. |
++| 2. Selective backward (arm S) | Pilot GO (E-010, F-012); a pre-registered test is still to be written | A conditional positive result, credited to Jiang et al. 2019; the contribution is the rigorous, compute-matched test. |
++| Link: check L | Plan only | Asks whether the meeting gradient lives on the same rows that selective backward keeps. |
++| Shared protocol | In place | Paired seeds, the two-consecutive crossing rule (D-018), pre-registration, two baseline tunings (R-21, F-011), exact FLOP counting, no seed-adding after "inconclusive". |
+ 
+-| Check | Question | Training needed | Note |
+-|---|---|---|---|
+-| A | What is the geometry of the meeting signal: how much is parallel to the task gradient, and does it resemble a Gauss-Newton direction? | 3 runs of arm D, measurement only | `mechanism-a-direction-geometry.md` |
+-| B | If G were a perfect local inverse (or a Gauss-Newton oracle), would the signal help at all? | Oracle arms, cost ignored | `mechanism-b-oracle-arm.md` |
+-| C | Does the meeting loss help where backprop is weak (a deep plain MLP, SGD with momentum)? | A small Stage-3-style study | `mechanism-c-deep-network-sgd.md` |
+-| D | Is the meeting signal *sufficient* to train the lower half on its own (backprop cut at the middle state)? | Replacement arms | `mechanism-d-replacement-test.md` |
++Three claims, of different kinds, if the plans go well: (1) a reproducible protocol with evidence that it catches false positives; (2) a negative result with a mechanism; (3) a conditional positive result. Novelty stays modest, so aim for a negative-results, reproducibility or workshop venue.
+ 
+-## Order and dependencies
++## Notes in this study
+ 
+-1. **A first.** It is cheap and its code (`exploratory/mechanism.py`: the top-half Jacobian, the softmax Hessian and the target directions) is reused by B and D.
+-2. **B second.** It uses A's directions as its oracle targets. A's result also tells you whether B is worth running (see A's decision rule, Q3).
+-3. **D third.** Its oracle replacement arm is B's oracle with backprop cut. Do D only after B's code is tested.
+-4. **C last.** It is the largest (a new model, a new optimizer, a tuning sweep) and the one where a positive result is most plausible, so it should be run with the cleanest code.
++| Note | What it does | Training |
++|---|---|---|
++| `mechanism-a-direction-geometry.md` (check A) | Parallel/orthogonal split and Gauss-Newton cosine of the meeting signal | 3 runs of arm D, measurement only |
++| `linking-measurement-concentration.md` (check L) | E-009 concentration analysis on the meeting gradient (selected vs unselected rows) | shares A's runs, plus 3 runs of arm A |
++| `mechanism-dose-response.md` (check G0) | Fixed-hyperparameter dose-response of the learned loss, with rho (relative gradient norm) as the dose | 50 runs, no tuning |
++| `mechanism-b-oracle-arm.md` (check B) | Oracle targets (pinv, Gauss-Newton, damped logit-space) plus the scaled-gradient control, cost ignored | oracle arms |
++| `mechanism-d-replacement-test.md` (check D) | Is the meeting signal sufficient to train the lower half with backprop cut? | replacement arms |
++| `mechanism-c-deep-network-sgd.md` (check C) | Deep plain MLP, SGD with momentum, against deep supervision | a small Stage-3-style study |
++| `mechanism-g-and-cost-deferred.md` (Gate 3) | Fixes for G's quality and cost; **blocked** until a step reduction is shown | none until the gate opens |
++| `selective-backward-prereg-prep.md` | Regression check, wall-clock, small-batch control, `sel_frac` curve, decisions for `prereg-v2` | 3 small looks |
+ 
+-C does not depend on A, B or D and can be started in parallel if you prefer.
++## Gates and order
++
++- **Gate 0 (cheap, first):** check A, check L, check G0. They reuse existing code and need no new network structure. A and L share the same training runs.
++- **Gate 1:** check B (needs A's Jacobian code; A's Q3 tells you whether the Gauss-Newton arm is worth running) and check D (reuses B's oracle). Run G0 before B so the dose interpretation is known.
++- **Gate 2:** check C (largest; independent of the others and may be started in parallel).
++- **Gate 3 (deferred):** `mechanism-g-and-cost-deferred.md`. Opens only if G0, B or C shows a step reduction large enough to pay the overhead: about 31% fewer steps for +23% per step, 24% for +12%, 20% for +6% (0.85 divided by 1 plus the overhead). If no gate opens, the mechanism result is the contribution and Gate 3 is not run.
++- **Track S (independent of the gates above, start it first):** `selective-backward-prereg-prep.md`: regression check, then the three looks, then the decisions and `prereg-v2`. It is the main line for a positive result.
++
++Suggested working order: Step 0 of track S, then check A + L + G0, then the three looks of track S, then B and D, then write `prereg-v2`. C can run alongside any of these.
+ 
+ ## Shared conventions
+ 
+-- **Decision.** Record one decision before running anything: D-020 (or the next free ID), "Stage 4: mechanism diagnostics A to D, exploratory". Add a drift entry if the PLAN changes (the PLAN lists these as option (a)). Commit the plan and the decision BEFORE the first run.
+-- **Seeds.** Used so far: 100, 101, 1000, 1001, 2000, 2001 (sweeps), 0 to 19 (Stage 3), 500 to 502 (E-009). New, one block per check:
++- **Decision.** Record D-020 (or the next free ID): "Stage 4: mechanism diagnostics, exploratory", and update D-021 (open items of the selective line). Commit the plan and the decision BEFORE the first run. A drift entry is needed for changes to `src/` (see "Files to add").
++- **Seeds.** Used so far: 100, 101, 1000, 1001, 2000, 2001 (sweeps), 0 to 19 (Stage 3), 500 to 502 (E-009), 600 to 602 (pilot E-010, also check A and check L, which answer different questions). New blocks:
+ 
+ | Check | Seeds |
+ |---|---|
+-| A | 600 to 602 |
++| A and L | 600 to 602 |
++| G0 | 1100 to 1109 |
+ | B phase 1 (screen) | 700 to 702 |
+ | B phases 2 and 3 | 710 to 719 |
+ | C probe | 800, 801 |
+@@ -37,36 +52,41 @@ C does not depend on A, B or D and can be started in parallel if you prefer.
+ | C final | 820 to 829 |
+ | D tuning | 950, 951 |
+ | D final | 900 to 909 |
++| Track S: timing, small batch | 1200 to 1204 |
++| Track S: `sel_frac` curve | 1210 to 1212 |
++| `prereg-v2` final (reserved) | 1300 to 1319 |
+ 
+-- **Metric** where a comparison is made: steps-to-target and FLOPs-to-target under the D-018 crossing rule (two consecutive evaluations at or above the target). A run that never reaches a target is recorded with its full-run steps and FLOPs and counted in `n_never`; never dropped.
+-- **Targets:** 0.97 and 0.975 (as D-019) except in C, where plain SGD on a deep net is slower and the targets are 0.95 and 0.97 (fixed in C's note).
+-- **Reference baselines:** both tunings of arm A (`configs/tuned/t1_base_two.yaml` = A, `configs/tuned/t2_base_two.yaml` = A2). Any comparison reports against both (R-21, F-011).
+-- **Statistics:** paired percentage change by seed with a bootstrap interval, as in `src/sweep.py` (`paired_pct_change`, `margin_verdict`, `overall_verdict`) and `scripts/analyze.py compare`. Check the exact function signatures before reuse.
+-- **No seed-adding after "inconclusive".** If a result is inconclusive, log it as such; a new test on fresh seeds needs its own written plan (D-019 point 2).
+-- **Exploratory, not confirmatory.** Nothing here can be reported as a confirmed effect. A positive lead needs a new pre-registered confirmatory run on fresh seeds with a fixed reference baseline (D-015).
++- **Tuning tags.** `t3` (check C), `t4` (check D); use `t5` for a fresh independent tuning of A in `prereg-v2`.
++- **Metric** where a comparison is made: steps-to-target and FLOPs-to-target under the D-018 rule (two consecutive evaluations at or above the target). A run that never reaches a target is recorded with its full-run steps and FLOPs and counted in `n_never`; never dropped. Targets 0.97 and 0.975 (C uses 0.95 and 0.97).
++- **Reference baselines:** both tunings of arm A (`t1_base_two.yaml` = A, `t2_base_two.yaml` = A2); fixed-hyperparameter designs (G0) remove tuning noise by construction and are conditional on A's tuned settings, which favour the baseline.
++- **Statistics:** paired percentage change by seed with a bootstrap interval, as in `src/sweep.py` and `scripts/analyze.py compare` (check the signatures before reuse).
++- **No seed-adding after "inconclusive"**, and no editing of a rule after the data. A positive lead needs a new pre-registered confirmatory run on fresh seeds with a fixed reference baseline (D-015).
+ 
+ ## How the outcomes combine
+ 
+ | Outcome | Reading |
+ |---|---|
+-| A: REDUNDANT, and B: NO HELP | Closed: the signal is redundant even with a perfect G. Strongest form of the mechanism result. |
+-| B: HELPS | The direction carries information that backprop lacks. Engineering a cheaper G becomes worthwhile; plan a confirmatory test. |
+-| B: NO HELP but A's Q2 positive | G approximates a curvature direction, but a better direction does not buy steps. Report as a negative mechanism result. |
+-| C: SUPPORTED | The premise holds where backprop is weak. Plan a confirmatory run (new seeds, pre-registered). |
+-| C: REFUTED | The signal does not help even where backprop is weak (in this setup). Closes the line for MLPs. |
+-| D: SUFFICIENT with learned G | The meeting signal can carry the lower half. Any benefit then is about wall-clock or parallel execution, which this repo does not measure. |
+-| D: INSUFFICIENT with learned G but SUFFICIENT with the oracle | G quality is the bottleneck (problem 5). |
+-| D: INSUFFICIENT with both | The local-inverse signal itself is not enough to train on. |
++| A REDUNDANT and L ALREADY SELECTIVE | The meeting signal is parallel to the task gradient and lives on the same rows; supports the redundancy explanation and predicts that a hybrid adds nothing. |
++| G0 DOSE HARMS or FLAT, and B NO HELP | No support for the signal in this setup, with and without a perfect `G`. Strongest form of the mechanism result (not a proof). |
++| G0 DOSE HELPS | The E-008 failure was partly a scale problem. B becomes much more interesting; plan a confirmatory test. |
++| B HELPS | The direction carries information that backprop lacks. Gate 3 may open if the step reduction is large enough. |
++| C SUPPORTED | The premise holds where backprop is weak. Plan a confirmatory run (new seeds, pre-registered). |
++| C REFUTED | No support for the premise even where backprop is weak (in this setup). |
++| D SUFFICIENT with learned G | The meeting signal can carry the lower half; any benefit is about parallel execution, which this repo does not measure. |
++| D INSUFFICIENT with learned G but SUFFICIENT with the oracle | G's quality is the bottleneck (problem 5). Gate 3 is relevant only if a step reduction exists. |
++| D INSUFFICIENT with both | The local-inverse signal itself is not enough to train on. |
++| Track S looks: BASELINE PROBLEM | The confirmatory test must use the best-batch baseline as reference. |
++| Track S looks: DOES NOT TRANSLATE (wall-clock) | The FLOPs saving is real but not a speed saving at this model size; say so, and test a larger width before concluding. |
+ 
+ ## What these checks can NOT show
+ 
+ - Anything beyond the MNIST MLP family, one optimizer family per check, and 3,000 steps (6,000 in C if the probe requires it).
+-- Mechanism in the causal sense: A is geometry, B and D are interventions on one signal. Together they narrow the explanation; they do not prove it.
+-- A wall-clock or parallelism benefit (single device; D counts FLOPs only).
++- Mechanism in the causal sense: A, L and G0 are geometry and dose; B and D are interventions on one signal. Together they narrow the explanation; they do not prove it.
++- A wall-clock or parallelism benefit (single device; D counts FLOPs only; track S measures timing on one machine).
+ 
+ ## Files to add
+ 
+-`exploratory/mechanism.py`, `scripts/mechanism_check.py`, `tests/test_mechanism.py` (A); new arm keys in `src/model.py` and `compute_losses` (B, D); a deep model and an `optimizer` config key (C). Methods that change `src/` change the locked paths of D-019: the lock applies to the Stage 3 plan, so these additions need a drift entry (DR-005 onward) stating that they do not alter any Stage 3 arm, and a regression test that arms A to F still reproduce their logged results bit for bit (as in Stage 1).
++`exploratory/mechanism.py`, `scripts/mechanism_check.py`, `tests/test_mechanism.py` (A and L); a `meet_rho` arm and `scripts/run_dose_response.py` (G0); new arm keys in `src/model.py` and `compute_losses` (B, D); a deep model and an `optimizer` config key (C); extensions of `scripts/pilot_selective.py` and timing and batch-control scripts (track S). Changes under `src/` touch the paths locked by D-019: each needs a drift entry (DR-008 onward) stating that no Stage 3 arm changes, and a regression test that arms A to F and S still reproduce their logged results bit for bit (as in Stage 1).
+ 
+ ## Log
+ 
+diff --git a/docs/notes/selective-backward-prereg-prep.md b/docs/notes/selective-backward-prereg-prep.md
+new file mode 100644
+index 0000000..7bdd761
+--- /dev/null
++++ b/docs/notes/selective-backward-prereg-prep.md
+@@ -0,0 +1,94 @@
++# Selective backward (arm S): housekeeping, three exploratory looks and preparation of `prereg-v2`
++
++**Status:** plan and decision rules, written BEFORE any of the runs below. Type: `exploratory` for the three looks; the final test is a separate, later, pre-registered step. Do not edit a rule after seeing results; add a dated note below instead. Follows the pilot (`selective-backward-pilot.md`, E-010, F-012) and D-021 (proposed, items OPEN).
++
++## Why a preparation step
++
++The pilot gives S30 about 0.61 of A's FLOPs-to-target, with a step ratio of about 0.95. The break-even margin is large: S30 can need up to 1.39 times A's steps and still save 15% (pilot note), so a repeat of the same test on MNIST would very probably pass and teach little. The things that can still change the conclusion are:
++1. the baseline is not compute-optimal in **batch size** (it was fixed at 128 in every config and sweep), so a plain smaller batch may already save a lot;
++2. **wall-clock time**, which FLOPs ignore (selecting and gathering rows has a cost);
++3. **how aggressive** the selection can be (only `sel_frac` 0.3 and 0.5 were tried);
++4. a **second setting** and an independent baseline tuning.
++
++## Step 0: housekeeping (before anything else)
++
++**Regression check (E-002 style), proposed by DR-007.** Rerun one Stage 3 arm-A seed on the current code: `python -m src.train --config configs/tuned/t1_base_two.yaml --seed 0` and compare its validation curve with the raw log of `final-t1-base-two` seed 0. Rule (fixed now): **PASS** if the validation accuracy at every evaluation step is identical on the same machine and library versions, or, on different hardware or versions, differs by at most 0.002 at every evaluation and gives the same steps-to-target. Otherwise stop and find the cause before any further run. Record the result as a verification entry.
++
++Then record D-020 and update D-021 (the open items) so the choices below have an owner.
++
++## Look 1: wall-clock time per step
++
++S30 versus A, same machine, same device (`device: auto`), warm-up of 200 steps excluded, then 1,000 steps timed, 3 repeats, median per step; include the top-k selection and row gather in S30. Descriptive, no seeds needed (use seed 1200). Rule:
++- **FLOPS SAVING TRANSLATES:** S30's time per step is at most 0.85 of A's.
++- **PARTIAL:** between 0.85 and 1.00.
++- **DOES NOT TRANSLATE:** 1.00 or more (the selection and gather cost eat the saving at this model size).
++
++Report the device. A result on CPU does not transfer to a GPU. A "does not translate" at this size is likely to be a property of the small MLP and should be tested at a larger width before concluding anything.
++
++## Look 2: the small-batch control (is A compute-optimal in batch size?)
++
++Arm A with batch size `b` in {32, 48, 64} (128 is the reference). FLOPs per step scale with `b` (check that the FLOP counter takes the batch size). Design (fixed now):
++- horizon `max_steps = 3000 x 128 / b` (equal samples seen as A's 3,000 steps);
++- tuning: for each `b`, 8 random trials over `lr` (log-uniform 3e-4 to 5e-3) with A's other settings fixed, 2 seeds (1200, 1201), scoring by FLOPs-to-0.97 under the D-017 and D-018 rules;
++- evaluation: the best trial per `b` on 3 fresh seeds (1202 to 1204); S30 and A (batch 128, tuned) on the same seeds.
++
++Metric: ratio of mean FLOPs-to-target versus A at 0.97 and 0.975. Rule:
++- **BASELINE PROBLEM:** the best small-batch arm has ratio at most 0.85 at both targets. Then A is not compute-optimal, and the confirmatory test must use the best-batch A as the reference.
++- **A WAS FINE:** every small-batch arm has ratio at least 1.00 at both targets.
++- **PARTIAL:** anything else. Include the best small-batch arm as a reference arm in `prereg-v2` anyway.
++
++Also report whether S30 still beats the best small-batch arm by at least 15% (ratio S30 / best small batch at most 0.85).
++
++## Look 3: how aggressive can the selection be? (`sel_frac` curve)
++
++`sel_frac` in {0.1, 0.2, 0.3, 0.5} with A's tuned hyperparameters, `sel_warmup` 100, on seeds 1210 to 1212, plus A on the same seeds. Exact per-step FLOPs (batch 128, forward 68,812,800 always paid, 673,792 per backward row):
++
++| `sel_frac` | rows `k` | FLOPs per step | vs A |
++|---|---|---|---|
++| 0.1 | 13 | 77,572,096 | 0.500 |
++| 0.2 | 26 | 86,331,392 | 0.557 |
++| 0.3 | 39 | 95,090,688 | 0.613 |
++| 0.5 | 64 | 111,935,488 | 0.722 |
++
++The forward pass is 44.4% of A's cost, so **no selection can save more than about 56% per step**; the useful range is bounded. Metric: FLOPs ratio and steps ratio versus A at both targets, and misses. Descriptive, with one rule: the **knee** is the smallest `sel_frac` whose ratio is at most 0.85 at both targets with no missed seed. State it in the log and use it, with 0.3, as the pre-registered `sel_frac` candidates (at most two values in the final test).
++
++## The hybrid arm (meeting loss on the selected rows)
++
++Include it in `prereg-v2` **only if** check L (`linking-measurement-concentration.md`) ends NOT SELECTIVE or PARTIAL. If it ends ALREADY SELECTIVE, skip it (predicted null, no information). If included: one arm, labeled exploratory, with the expectation "null" written before the run, outside the primary hypothesis and outside the multiplicity of the primary comparison.
++
++## Decisions needed before `prereg-v2` (recommended defaults, yours to choose)
++
++1. **S's hyperparameters:** inherit A's tuned values as the **primary** (conservative: A was tuned, S was not; the claim reads "bolting selective backward onto a tuned recipe saves compute"). Tuning S with the same budget is a descriptive secondary only.
++2. **Baselines:** A1 (`t1_base_two`), A2 (`t2_base_two`), a **fresh independent tuning of A** (new tag, for example `t5`; `t3` and `t4` are reserved by checks C and D), and the best small-batch arm from Look 2. The noise-floor rule of D-019 applies.
++3. **Seeds and rule:** about 20 seeds (block 1300 to 1319), a 15% margin, the three-way outcome (supported / refuted / inconclusive) as in D-019, R30 reported and never deciding. The expected effect (about -39%) is far from the 15% margin, so power is not the issue; use the effort on the baselines and the second setting.
++4. **Second setting:** an MLP on Fashion-MNIST or flattened CIFAR-10 (the hand-written backward probably carries over; check the input dimension handling). It needs **its own tuned baseline** (a 25-trial, 2-seed tuning of A in that setting, same rules). A CNN needs a new backward pass and can come later.
++5. **Wall-clock** as a pre-registered secondary outcome (Look 1's protocol).
++
++## Draft hypothesis for `HYPOTHESES.md` (edit before use)
++
++> **H7 (draft).** In the MNIST MLP setting of D-008, the selective backward arm S at `sel_frac` = *[from Look 3]*, inheriting the hyperparameters of the tuned baseline A1, reaches validation accuracy 0.97 and 0.975 with at least 15% fewer FLOPs (counted as in `src/flops.py`) than the best of A1, A2, a fresh independent tuning of A, and the best small-batch baseline, on 20 paired seeds. **Supported / refuted / inconclusive** by the rule of D-019 (margin 15%, noise floor from the baseline tunings, both targets must agree).
++
++Then: a lock tag `prereg-v2`, an update of the lock check in `scripts/run_final.py` (it is tied to `prereg-v1`), and a plan file in the style of `configs/stage3_plan.yaml`, all committed before the first final seed.
++
++## Related work to read before any claim (verify the citations)
++
++Jiang et al. 2019, "Accelerating Deep Learning by Focusing on the Biggest Losers" (selective backprop; the abstract reports convergence to a target error up to 3.5 times faster than standard SGD on image datasets, mostly in wall-clock terms, which makes Look 1 and the choice of what is counted important); Katharopoulos and Fleuret 2018 (importance sampling with gradient norms); Loshchilov and Hutter 2015 (online batch selection). The idea is known; the contribution is a rigorous, compute-matched test with the baselines above and tuning noise controlled.
++
++## What these looks can NOT show
++
++- Anything confirmatory: all three are exploratory (D-015), on 3 seeds, and each informs the design of `prereg-v2`, not a claim.
++- Look 1 is one machine and one model size; Look 2 tunes only the learning rate; Look 3 inherits A's hyperparameters.
++- Generality beyond the MNIST MLP: that is the job of the second setting.
++
++## How to run (once the code exists)
++
++```
++python -m pytest -q
++git add -A && git commit -m "..." && git push        # BEFORE the looks
++python -m src.train --config configs/tuned/t1_base_two.yaml --seed 0     # Step 0 regression
++python scripts/time_selective.py --tag sw1                                # Look 1
++python scripts/run_batch_control.py --tag sb1                             # Look 2
++python scripts/pilot_selective.py --tag sf1 --sel-fracs 0.1 0.2 0.3 0.5 --seeds 1210 1211 1212   # Look 3
++```
++
++Templates; check `scripts/pilot_selective.py` for the real options (it may need a `--sel-fracs` or `--seeds` option, and its variants are currently fixed). Log each look as an `exploratory` entry in `EXPERIMENT_LOG.md`.
+-- 
+2.43.0
+

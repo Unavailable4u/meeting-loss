@@ -1,0 +1,655 @@
+From c4f936d8a8908480e9c540aaf9f085052d0f8b19 Mon Sep 17 00:00:00 2001
+From: Unavailable4u <noreply@example.com>
+Date: Sun, 25 Oct 2026 01:04:04 +0000
+Subject: [PATCH] Single living paper draft, paper plan with split triggers,
+ claims C-10..C-25, D-020/DR-008 (proposed), regression-check script
+
+- paper/PAPER_DRAFT.md rewritten as one paper whose headline does not depend on the selective result
+- paper/PAPER_PLAN.md: one paper now, explicit split triggers
+- paper/CLAIMS.md: claims C-10 to C-25 appended (rows C-01..C-09 unchanged); FIGURES.md FIG-07..10; references.bib entries (all marked to verify)
+- docs/DECISIONS.md D-020 (proposed), docs/DRIFT_LOG.md DR-008, DOCUMENT_MAP rows
+- scripts/verify_regression.py + tests/test_verify_regression.py (Step 0 of the selective-backward preparation)
+No experiment, hypothesis, threshold, seed set or tuned config changed.
+---
+ docs/DECISIONS.md               |  13 +++
+ docs/DOCUMENT_MAP.md            |   2 +
+ docs/DRIFT_LOG.md               |   8 ++
+ paper/CLAIMS.md                 |  16 ++++
+ paper/FIGURES.md                |   4 +
+ paper/PAPER_DRAFT.md            | 120 ++++++++++++++++--------
+ paper/PAPER_PLAN.md             |  45 +++++++++
+ paper/references.bib            |  87 ++++++++++++++++++
+ scripts/verify_regression.py    | 157 ++++++++++++++++++++++++++++++++
+ tests/test_verify_regression.py |  72 +++++++++++++++
+ 10 files changed, 486 insertions(+), 38 deletions(-)
+ create mode 100644 paper/PAPER_PLAN.md
+ create mode 100644 scripts/verify_regression.py
+ create mode 100644 tests/test_verify_regression.py
+
+diff --git a/docs/DECISIONS.md b/docs/DECISIONS.md
+index 6f1310a..e00558a 100644
+--- a/docs/DECISIONS.md
++++ b/docs/DECISIONS.md
+@@ -202,3 +202,16 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
+ - Alternatives considered: stopping at the pilot; tuning S first (the rule says TUNE only when the verdict is not GO); going straight to the Stage 4 checks of D-020.
+ - Consequences: a confirmatory test needs a new hypothesis in `docs/HYPOTHESES.md`, a lock tag, and an updated lock check in `scripts/run_final.py` (it is tied to `prereg-v1`). Until then every statement about arm S is conditional on the pilot's scope: 3 seeds, one MLP, A's hyperparameters, FLOPs not wall-clock (R-21 applies).
+ - Evidence: E-009, E-010, F-012; `docs/notes/selective-backward-pilot.md`.
++
++## D-020: After Stage 3: keep both lines in one project and one paper; run the Stage 4 mechanism checks and the selective-backward preparation; proposed, nothing below is accepted until the researcher marks it
++- Date: 2026-10-25
++- Status: **proposed**. Drafted by the assistant for review. D-021 (selective backward) stays proposed and its OPEN items stay open until the preparation in `docs/notes/selective-backward-prereg-prep.md` is done.
++- Context: Stage 3 gave a pre-registered null result for the meeting loss (H1 refuted, E-008) and a null for deep supervision (H6 refuted). The gradient-concentration check (E-009) and the pilot of selective backward (E-010) are exploratory leads. Plans for the mechanism checks and the link measurement are in `docs/notes/mechanism-overview.md`.
++- Decision (proposed):
++  1. **One project and one paper.** The two lines answer the same question under the same protocol and the claims do not strain each other (`paper/PAPER_PLAN.md`). Split only if a trigger written there happens.
++  2. **Stage 4 = mechanism diagnostics**, all `exploratory` (D-015): checks A, L, G0 first, then B and D, then C; the fixes for `G` and cost (Gate 3) are deferred and blocked until a step reduction is shown.
++  3. **Selective line:** the regression check, the three exploratory looks (wall-clock, small batch, `sel_frac` curve), then a pre-registered `prereg-v2`. Prior work (Jiang et al. 2019) is credited; the contribution is the compute-matched test.
++  4. **The paper does not depend on the selective result.** If it fails or is not finished, the paper is the protocol plus the negative result with its mechanism.
++- Alternatives considered: stopping at the Stage 3 null; only the selective line; splitting into two papers now; the meeting-loss and selective-backward hybrid as a method (kept only as an optional exploratory arm, gated by check L).
++- Consequences: new notes under `docs/notes/`; changes under `src/` need drift entries; each check logs an `exploratory` experiment; the paper draft and claims register were restructured (DR-008).
++- Evidence: E-008, E-009, E-010, F-009 to F-012; `docs/notes/mechanism-overview.md`; `paper/PAPER_PLAN.md`.
+diff --git a/docs/DOCUMENT_MAP.md b/docs/DOCUMENT_MAP.md
+index 8c2b949..79dcf16 100644
+--- a/docs/DOCUMENT_MAP.md
++++ b/docs/DOCUMENT_MAP.md
+@@ -59,6 +59,8 @@ In words:
+ | What could go wrong? | `docs/RISKS.md` |
+ | What changed from the original plan, and what did it touch? | `docs/DRIFT_LOG.md` |
+ | What is the paper saying, and is every claim backed? | `paper/PAPER_DRAFT.md` and `paper/CLAIMS.md` |
++| One paper or two, and when would we split? | `paper/PAPER_PLAN.md` |
++| What mechanism checks and selective-backward preparation are planned, in what order, with what rules? | `docs/notes/mechanism-overview.md` (index of the planned checks) |
+ | What other ideas could we try? | `docs/reference/02-brain-vs-model-comparison.md`, Section 8 |
+ | What other parts of training could we work on later (loss, gradient computation, data, architecture)? | `docs/reference/01-proposal-and-starting-guide.md`, Section 3 (the lever table) and Section 9 (the backlog) |
+ | What are the rules for running experiments fairly? | `docs/GUIDE.md`, Section 5 |
+diff --git a/docs/DRIFT_LOG.md b/docs/DRIFT_LOG.md
+index ae540fa..0e74f4f 100644
+--- a/docs/DRIFT_LOG.md
++++ b/docs/DRIFT_LOG.md
+@@ -60,3 +60,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
+ - Decision recorded: D-021 (proposed; D-020 stays reserved for the gate / Stage 4 decision)
+ - Docs updated: [x] PLAN  [ ] HYPOTHESES (no hypothesis yet; a test needs a new one before `prereg-v2`)  [ ] METHOD (not changed: the new arm is described in `docs/notes/selective-backward-pilot.md`)  [x] FINDINGS (F-012)  [ ] LITERATURE (citations still to verify)  [ ] RISKS  [ ] CLAIMS (none)  [ ] PAPER_DRAFT  [ ] FIGURES
+ - Experiments invalidated or needing rerun: none. Evidence that the old arms are unchanged: the full test suite passes (87 tests, of which 66 predate the change); the pilot's arm A logged 465.2 GFLOPs over 3,000 steps, which equals 3,000 times the pre-existing analytic count of 155,058,176 per step. Not yet done: rerun one Stage 3 arm-A seed on the current code and compare its validation curve with its raw log (a verification entry, E-002 style).
++
++## DR-008: Paper reframed from a positive-claim study to a protocol, a negative result with its mechanism, and a conditional selective-backward result; claims register extended
++- Date: 2026-10-25
++- Trigger: GUIDE Section 4 trigger 9 (pivot) for the paper: the Stage 3 outcome (H1 and H6 refuted) removed the premise of the original draft skeleton
++- What changed: before: `paper/PAPER_DRAFT.md` was a skeleton for a positive efficiency claim (claims C-01, C-02, C-04, C-06). After: one living draft whose headline does not depend on a positive result, `paper/PAPER_PLAN.md` (one paper and the split triggers), claims C-10 to C-25 added to `paper/CLAIMS.md` (existing rows C-01 to C-09 unchanged), figures FIG-07 to FIG-10 planned, bibliography entries added (each marked for verification). No experiment, hypothesis, threshold, seed set or tuned config was changed.
++- Decision recorded: D-020 (proposed)
++- Docs updated: [ ] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS  [ ] LITERATURE (citations still to verify)  [ ] RISKS  [x] CLAIMS  [x] PAPER_DRAFT  [x] FIGURES
++- Experiments invalidated or needing rerun: none.
+diff --git a/paper/CLAIMS.md b/paper/CLAIMS.md
+index 8d5b437..09aa4c8 100644
+--- a/paper/CLAIMS.md
++++ b/paper/CLAIMS.md
+@@ -13,3 +13,19 @@ Every claim the paper makes, mapped to evidence. A claim may only appear in `PAP
+ | C-07 | Per-step compute overhead of each arm relative to the baseline (meeting loss about +23% FLOPs, deep supervision about +0.6%, autoencoder auxiliary about +116% for this MLP). | empirical (deterministic count) | F-003 | supported | Sec. 3 (cost analysis) | 2026-10-21 |
+ | C-08 | Deep supervision on the middle state (the DSN auxiliary classifier) reduces the FLOPs needed to reach a target validation accuracy compared with a tuned baseline. (provisional; the hypothesis was generated from the exploratory finding F-007 and is tested confirmatively under the D-019 rule; the paper must say so) | empirical | F-010 (H6 refuted); F-011 | refuted | Sec. 5.2 | 2026-10-23 |
+ | C-09 | In a compute-matched comparison on an MNIST MLP, with a tuned baseline and a tuned auxiliary loss, adding a target-propagation-style (SDTP-target) auxiliary loss at a middle layer does not reduce the FLOPs needed to reach 97.0% or 97.5% validation accuracy: it needed about 36% more (97.5% paired-bootstrap intervals +26% to +47% and +27% to +44%), even though the auxiliary gradient is strongly aligned with the task gradient (cosine about +0.75). (conditional on the tuned configurations, AdamW and this model; final wording in the paper must state this scope) | empirical | F-009; E-008 | supported | Sec. 5.1, Abstract | 2026-10-23 |
++| C-10 | Re-tuning the baseline (arm A) with independent seeds gave a configuration that tied the first at the selection stage but needed 34% (97.0%) and 17% (97.5%) more FLOPs on 20 paired fresh seeds; selection-level differences from 2 seeds are therefore not reliable at this size. (exploratory; state the scope: one MLP, AdamW) | empirical | F-011; E-008 | weak | Sec. 5.5, 7 | 2026-10-25 |
++| C-11 | Rankings among the top arms depend on how "reaching a target" is defined; a first-crossing rule is noisy, and we adopt two consecutive evaluations at or above the target. (exploratory; no numbers in the paper until F-006 is re-checked) | empirical | F-006; D-018 | weak | Sec. 4, 5.5 | 2026-10-25 |
++| C-12 | Control F (the exact-gradient target) is a near-inert negative control: its gradient on the middle state is 2*lam_meet*eta_hat/d times the task gradient, so its scale must be set explicitly (as the oracle arms of check B do). | empirical (derivation plus check) | F-005; D-018 | supported | Sec. 4, 5.2 | 2026-10-25 |
++| C-13 | In a 3-seed pilot on an MNIST MLP with the baseline's tuned hyperparameters, running the backward pass only on the highest-loss 30% of each batch reached 97.0% and 97.5% validation accuracy at about 0.61 to 0.63 of the tuned baseline's FLOPs, while random rows of the same count needed more FLOPs than the baseline. (exploratory pilot; tentative; must be restated from the pre-registered test, C-21, before it is a result) | empirical | F-012; E-010 | weak | Sec. 5.4 | 2026-10-25 |
++| C-14 | After about step 500, the highest-loss 30% of each batch carries 98% to 99.7% of the gradient norm and has cosine about 1.0 with the full gradient, while a random 30% carries 25% to 33% (arm A, 3 seeds). (exploratory; necessary condition for selective backward, not a result about training speed) | empirical | E-009 | weak | Sec. 5.4, 6 | 2026-10-25 |
++| C-15 | The meeting loss's gradient on the lower layers is split into a part parallel to the task gradient and an orthogonal part; [state the measured share and what the orthogonal part does to the loss]. (planned; check A; wording depends on its rule) | empirical | none yet (`docs/notes/mechanism-a-direction-geometry.md`) | planned | Sec. 6 | 2026-10-25 |
++| C-16 | [The meeting gradient is / is not concentrated on the highest-loss rows that selective backward keeps.] (planned; check L; wording depends on its rule) | empirical | none yet (`docs/notes/linking-measurement-concentration.md`) | planned | Sec. 6 | 2026-10-25 |
++| C-17 | At fixed hyperparameters and paired seeds, the learned meeting loss [helps / harms / does not change] steps-to-target across a dose of its gradient strength (rho). (planned; check G0) | empirical | none yet (`docs/notes/mechanism-dose-response.md`) | planned | Sec. 6 | 2026-10-25 |
++| C-18 | With an oracle target in place of the learned inverse (and the strength set explicitly), the signal [does / does not] reduce steps-to-target next to backpropagation in this setup. (planned; check B) | empirical | none yet (`docs/notes/mechanism-b-oracle-arm.md`) | planned | Sec. 6 | 2026-10-25 |
++| C-19 | Training the lower layers with the meeting signal alone (backpropagation cut at the middle state) is [sufficient / partly sufficient / insufficient] with a learned and with an oracle inverse. (planned; check D) | empirical | none yet (`docs/notes/mechanism-d-replacement-test.md`) | planned | Sec. 6 | 2026-10-25 |
++| C-20 | In a deep plain MLP trained with SGD with momentum, the meeting loss [does / does not] reduce FLOPs-to-target compared with the baseline and with deep supervision. (planned; check C) | empirical | none yet (`docs/notes/mechanism-c-deep-network-sgd.md`) | planned | Sec. 5.3 | 2026-10-25 |
++| C-21 | Running the backward pass only on the highest-loss rows reduces FLOPs-to-target by at least 15% against the best of the tuned baselines (two tunings, a fresh independent tuning, the best small-batch baseline) on 20 paired seeds. (planned; the pre-registered test prereg-v2; the outcome is supported, refuted or inconclusive by its rule; prior work: Jiang et al. 2019) | empirical | none yet (`docs/notes/selective-backward-prereg-prep.md`) | planned | Sec. 5.4 | 2026-10-25 |
++| C-22 | A plain smaller batch size [does / does not] save compute against the baseline at batch 128, and selective backward [does / does not] still beat the best small-batch baseline. (planned; Look 2 of the preparation note) | empirical | none yet | planned | Sec. 5.4 | 2026-10-25 |
++| C-23 | The FLOPs saving of selective backward [translates / partly translates / does not translate] into wall-clock time per step on [device]. (planned; Look 1) | empirical | none yet | planned | Sec. 5.4, 7 | 2026-10-25 |
++| C-24 | The selective backward result [holds / does not hold] in a second setting with its own tuned baseline. (planned) | empirical | none yet | planned | Sec. 5.4 | 2026-10-25 |
++| C-25 | Per-step cost of the selective backward arm: the forward pass for the whole batch plus the backward pass for the selected rows only, so that keeping 30% of a batch of 128 costs about 0.61 of the baseline per step (exact count). (deterministic count; the 100-step warm-up with the full backward pass is accounted for in totals) | empirical (deterministic count) | `docs/notes/selective-backward-pilot.md`; E-010 (logged totals equal the analytic values) | supported | Sec. 3.3 | 2026-10-25 |
+diff --git a/paper/FIGURES.md b/paper/FIGURES.md
+index 897b63d..6567972 100644
+--- a/paper/FIGURES.md
++++ b/paper/FIGURES.md
+@@ -10,3 +10,7 @@ Every figure or table in the paper maps to a script and its data. Figures are re
+ | FIG-04 | Ablation table (no L_inv, frozen random G, no warm-up, meeting depth, G size, distance) | scripts/make_figures.py (to write) | results/raw/ (Stage 4) | Sec. 6 | planned |
+ | FIG-05 | Generalization: CIFAR-10 and modular-arithmetic results | scripts/make_figures.py (to write) | results/raw/ (Stage 5) | Sec. 5.3 | planned |
+ | FIG-06 | Robustness and scale table (batch size, optimizer, width, depth, 4x scale) | scripts/make_figures.py (to write) | results/raw/ (Stage 6) | Sec. 5.4 | planned |
++| FIG-07 | Share of the gradient norm carried by the top-loss rows versus step, for the task gradient (arm A and D) and the meeting gradient (check L) | scripts/make_figures.py (to write) | results/processed/linking_*.csv, gradient_concentration_gc1.csv | Sec. 5.4, 6 | planned |
++| FIG-08 | FLOPs-to-target of selective backward (S30, S50, random control) against the tuned baselines, with paired intervals | scripts/make_figures.py (to write) | results/raw/ (prereg-v2), pilot_selective_pilot1.csv for the pilot | Sec. 5.4 | planned |
++| FIG-09 | Dose-response curve of the learned meeting loss (steps-to-target versus rho) | scripts/make_figures.py (to write) | results/processed/dose_response_*.csv | Sec. 6 | planned |
++| FIG-10 | Parallel/orthogonal split and Gauss-Newton cosines over training (check A) | scripts/make_figures.py (to write) | results/processed/mechanism_a_*.csv | Sec. 6 | planned |
+diff --git a/paper/PAPER_DRAFT.md b/paper/PAPER_DRAFT.md
+index ed31ebc..ff4f960 100644
+--- a/paper/PAPER_DRAFT.md
++++ b/paper/PAPER_DRAFT.md
+@@ -7,65 +7,109 @@ LIVING DRAFT RULES (docs/GUIDE.md, Section 7)
+ 5. Write stable parts early (Method, Setup); Results last.
+ 6. Record limitations as soon as you know them.
+ Terminology must match docs/METHOD.md. Related Work must match the novelty statement in docs/LITERATURE.md.
++One paper, not two: see paper/PAPER_PLAN.md (split triggers). [C-xx] marks with square-bracket text inside a claim are open until the check that supports them has run.
+ -->
+ 
+-# <Working title: e.g. "A Target-Propagation Auxiliary Loss Next to Backpropagation: A Compute-Matched Study">
++# Which Ideas Actually Save Compute? A Pre-Registered, Compute-Matched Study of a Target-Propagation Auxiliary Loss and a Selective Backward Pass (working title)
+ 
+-Status: skeleton | Version: v0.1 | Last checked against FINDINGS: YYYY-MM-DD
++Status: draft | Version: v0.2 | Last checked against FINDINGS: 2026-10-25
+ 
+ ## Abstract
+-Status: skeleton | Depends on: all sections
+-Problem (1 sentence) → idea (1) → key result with number [C-..] (1) → scope and limitation (1).
++Status: skeleton | Depends on: all sections | Checked: 2026-10-25
++Problem: claims that a training idea saves compute are easy to make and hard to trust (tuning noise, unfair baselines, uncounted costs). Study 1: an auxiliary target loss next to backpropagation did not reduce FLOPs-to-target against a tuned baseline; it needed about 36% more [C-09], although its gradient is aligned with the task gradient [C-03]. Mechanism: [C-15 to C-19, planned]. Study 2: a selective backward pass over the highest-loss rows [C-21, planned; pilot C-13]. Protocol lessons: [C-10, C-11, C-12]. Scope: one MNIST MLP unless stated [C-24]. Write this last.
+ 
+ ## 1. Introduction
+-Status: skeleton | Depends on: H1-H4, LITERATURE
+-- The cost of training and the credit-assignment path
+-- The idea in one paragraph
+-- Contributions (each one a claim ID): [C-01] compute-matched efficiency result; [C-02] specificity against DSN-style and autoencoder auxiliaries; [C-06] not a learning-rate artifact; [C-03] mechanism (gradient alignment). State plainly that the loss is the SDTP target [C-05]; the study is the contribution.
++Status: skeleton | Depends on: H1 to H4, H6, LITERATURE | Checked: 2026-10-25
++- The cost of training and the credit-assignment path; why a fair, compute-matched test is needed.
++- Study 1 in one paragraph: the loss is the simplified difference target propagation (SDTP) target at a middle layer [C-05]; the contribution is the study, not the loss. It was pre-registered before the final seeds, and it is a null result [C-09].
++- Study 2 in one paragraph: backpropagating only the rows that matter. This is known (Jiang et al. 2019, selective backprop); we contribute a compute-matched test with tuning noise controlled [C-21]. The pilot is tentative [C-13].
++- Contributions, each a claim ID: [C-09] the null result; [C-15] to [C-19] the mechanism; [C-10] [C-11] [C-12] protocol lessons; [C-21] the selective-backward test (conditional on its outcome). State plainly that the paper does not depend on the last one (`paper/PAPER_PLAN.md`).
+ 
+ ## 2. Related work
+-Status: skeleton | Depends on: LITERATURE.md
+-- Target propagation, difference target propagation (Lee et al.), and simplified DTP (Bartunov et al.): our target is the SDTP target [C-05]; later theory (Meulemans et al.) and variants (fixed-weight DTP)
+-- Auxiliary and deep-supervision losses: DSN (Lee et al.), including the paper-versus-code difference in how the companion objective fades
+-- Ladder networks, autoencoder and cycle-consistency objectives
+-- Predictive coding and local-learning rules
+-- Evaluation methodology: Schmidt et al. (budgets, schedules, seeds, re-tuning noise)
+-- How this work differs (must match novelty notes in DECISIONS)
++Status: skeleton | Depends on: LITERATURE.md | Checked: 2026-10-25
++- Target propagation, difference target propagation \cite{lee2015dtp}, simplified DTP \cite{bartunov2018scal}: our target is the SDTP target [C-05]; theory \cite{meulemans2020tp}; fixed-weight variants \cite{shibuya2023fwdtp}; feedback alignment \cite{lillicrap2014random} and direct feedback alignment \cite{nokland2016dfa}. Prior work used these as *replacements* for backpropagation and judged final accuracy, not compute.
++- Auxiliary and deep-supervision losses \cite{lee2015dsn}, including the paper-versus-code difference in how the companion objective fades; ladder networks \cite{rasmus2015ladder}.
++- Selective and importance-based backward passes \cite{jiang2019biggestlosers}; importance sampling and online batch selection (to verify and add).
++- Evaluation methodology \cite{schmidt2021crowded}: budgets, schedules, seeds, re-tuning noise.
++- How this work differs: must match the novelty statement in `docs/LITERATURE.md` and the check of prior work done before the selective test.
+ 
+ ## 3. Method
+-Status: skeleton | Depends on: METHOD.md
+-- Setup and notation
+-- The meeting loss and its three components
+-- Algorithm box
+-- Cost analysis (extra FLOPs, memory)
++Status: draft | Depends on: METHOD.md | Checked: 2026-10-25
++
++### 3.1 Notation and the meeting loss
++`x`, `y`, one-hot `e_y`; the network splits at a middle layer into `F_low` and `F_up`; `G` maps class probabilities to the middle space; `sg` is stop-gradient. With `h = F_low(x)`, `z = F_up(h)`, `p = softmax(z)`:
++
++```
++L_task = CE(z, y)
++L_inv  = || G(sg(p)) - sg(h) ||^2          # trains G only
++b      = sg(h) + G(e_y) - G(sg(p))          # a constant per-example target for h
++L_meet = || h - b ||^2                      # trains F_low only, through h
++L      = L_task + lam_inv * L_inv + lam_meet(t) * L_meet,   lam_meet(t) = lam_meet * min(1, t / T_warmup)
++```
++
++The auxiliary use (backpropagation kept for `L_task`) is the difference from earlier work [C-05].
++
++### 3.2 Arms and controls
++A plain network; B deep supervision (companion head on `h`); C autoencoder auxiliary; D the meeting loss; E a lower-layer learning-rate control; F an exact-gradient-target control (a near-inert negative control whose scale must be set explicitly [C-12]); variants V1 (noisy inverse), V2 (augmented output), V3 (frozen random `G`). Definitions: `docs/METHOD.md`.
++
++### 3.3 The selective backward arm (S)
++Forward pass on the whole batch under no gradient, keeping the activations; per-example losses come for free. Select `k = ceil(sel_frac * B)` rows, the highest-loss ones (or random rows as a control); run a hand-written backward pass for the plain MLP on the selected rows only, with the gradient divided by the full batch size; use the full backward pass during a short warm-up. The hand-written backward matches autograd exactly and the FLOP count is exact [C-25].
++
++### 3.4 Cost analysis
++Per-step overheads relative to the baseline: meeting loss, deep supervision, autoencoder [C-07]; selective backward [C-25]. All FLOPs are counted with the exact counter (validated against the analytic count, F-001); wall-clock is reported separately [C-23, planned].
+ 
+ ## 4. Experimental setup
+-Status: skeleton | Depends on: D-003..D-008
+-- Datasets and splits; models; arms A-D
+-- Tuning protocol and budgets; seeds; metrics (steps-to-target, FLOPs-to-target)
+-- Compute used
++Status: draft | Depends on: D-003 to D-008, D-014, D-017 to D-019 | Checked: 2026-10-25
++- **Data.** MNIST with a fixed train/validation split (D-008); the test set is not used until the end.
++- **Model.** A plain MLP split at the middle layer; AdamW; 3,000 steps; batch size 128 for every arm (a small-batch control is planned, [C-22]).
++- **Targets and "reaching a target".** Validation accuracy 0.97 and 0.975; a target is reached at the first of two consecutive evaluations at or above it (D-018) [C-11]. A 0.98 target was too noisy on this validation set.
++- **Tuning.** Equal-budget random search per arm with seed-paired scoring by FLOPs-to-target (D-014, D-017); a second, independent tuning of the baseline as a noise floor [C-10].
++- **Pre-registered test (Study 1).** Hypotheses, thresholds, seeds and the three-way rule (supported, refuted, inconclusive; margin 15%) were fixed and tagged before any final seed (D-019).
++- **Exploratory work** is labelled as such everywhere; any exploratory lead is restated from a new pre-registered run before it is called a result (D-015).
++- **Compute used.** To be filled from the logs.
+ 
+ ## 5. Results
+-Status: skeleton | Depends on: F-IDs from Stages 3, 5, 6
+-- 5.1 Main comparison [C-..]
+-- 5.2 Comparison with other auxiliary losses [C-..]
+-- 5.3 Generalization: CIFAR-10, modular arithmetic [C-..]
+-- 5.4 Robustness and scale [C-..]
++Status: draft | Depends on: F-009 to F-012, E-008 to E-010 | Checked: 2026-10-25
++
++### 5.1 The meeting loss against a tuned baseline
++The meeting loss needed about 36% more FLOPs than the tuned baseline to reach 97.0% and 97.5% validation accuracy, with paired-bootstrap intervals that exclude any gain [C-09]. The pre-registered outcome of the first hypothesis is "refuted". The result is conditional on the tuned configurations, AdamW and this model.
+ 
+-## 6. Analysis
+-Status: skeleton | Depends on: F-IDs from Stage 4
+-- Ablations; gradient alignment (mechanism); failure cases
++### 5.2 Other auxiliaries and controls
++Deep supervision did not beat the tuned baseline at the primary targets; its selection-level lead did not replicate [C-08]. Control F is nearly inert by construction [C-12]. The autoencoder auxiliary costs more than any other arm per step [C-07].
++
++### 5.3 Deep plain network with SGD
++Planned (check C): [C-20].
++
++### 5.4 Selective backward
++Status of this subsection: pilot only. A 3-seed pilot with the baseline's tuned hyperparameters reached the targets at a fraction of the baseline's FLOPs, and random rows of the same count did worse [C-13]; the highest-loss rows carry nearly all of the gradient norm after the early phase [C-14]. These are exploratory. The pre-registered test [C-21], the small-batch control [C-22], wall-clock time [C-23] and a second setting [C-24] are planned. Do not state any selective-backward result as established until [C-21] has a supported outcome.
++
++### 5.5 Tuning noise and protocol lessons
++Re-tuning the baseline gave a configuration that tied at selection but differed on fresh seeds [C-10]; rankings depend on how "reaching a target" is defined [C-11].
++
++## 6. Analysis (mechanism)
++Status: skeleton | Depends on: F-IDs of Stage 4, checks A, L, G0, B, C, D | Checked: 2026-10-25
++- The auxiliary gradient is positively aligned with the task gradient [C-03], yet gives no gain [C-09]: the working explanation is redundancy (an interpretation until tested).
++- Geometry of the signal: parallel and orthogonal parts, Gauss-Newton direction [C-15].
++- Link to selective backward: is the meeting gradient already concentrated on the rows backprop uses? [C-16]
++- Dose-response at fixed hyperparameters [C-17]; oracle target [C-18]; sufficiency with backpropagation cut [C-19].
++- Ablations and variants V1 to V3 (all listed in the appendix).
+ 
+ ## 7. Limitations
+-Status: skeleton
+-- Scale; tasks tested; added compute; cases where it hurts; unresolved questions
++Status: draft | Checked: 2026-10-25
++- One MLP on MNIST, AdamW, 3,000 steps; the deep network, SGD and a second setting are separate, planned checks [C-20] [C-24].
++- Conditional on tuned configurations; two tunings of the baseline already differ noticeably on fresh seeds [C-10].
++- FLOPs, not wall-clock, unless stated [C-23].
++- Exploratory checks do not carry the weight of the pre-registered test (D-015).
++- Selective backward is an existing idea (Jiang et al. 2019); the contribution is the test, not the method.
+ 
+ ## 8. Conclusion
+ Status: skeleton
+ 
+ ## References
++Use `paper/references.bib`; every entry is verified before submission.
++
+ ## Appendix
+-- A. All hyperparameters and search ranges
+-- B. All variants tried (including failures)
+-- C. Extra plots
+-- D. Reproduction commands and code link
++- A. All hyperparameters and search ranges.
++- B. All variants and arms tried, including failures (arms A to F, V1 to V3, S variants).
++- C. Extra plots (FIG-01 to FIG-10 as they are made).
++- D. Reproduction commands and code link.
+diff --git a/paper/PAPER_PLAN.md b/paper/PAPER_PLAN.md
+new file mode 100644
+index 0000000..3baa461
+--- /dev/null
++++ b/paper/PAPER_PLAN.md
+@@ -0,0 +1,45 @@
++# Paper plan: one paper, with explicit split triggers
++
++**Status:** plan v1, 2026-10-25. Proposed together with D-020 and DR-008 (both marked proposed). The draft itself is `paper/PAPER_DRAFT.md`; claims live in `paper/CLAIMS.md`.
++
++## Decision: one paper for now
++
++The two lines (the auxiliary target loss, and the selective backward pass) answer the same question under the same protocol: *what reduces the compute needed to reach a target accuracy, measured fairly?* They share the setting (MNIST MLP), the baselines, the metric (FLOPs-to-target), the statistics and the lessons about tuning noise. The link between them is a measurement (check L). The claims do not strain each other, so there is no reason to divide the work.
++
++## Why the paper does not depend on the selective backward result
++
++| If the selective backward test ends | The paper is |
++|---|---|
++| SUPPORTED (and holds in a second setting, and wall-clock is reported) | A protocol, a negative result with a mechanism, and a conditional positive result |
++| INCONCLUSIVE or REFUTED | A protocol, a negative result with a mechanism, and an honest second negative |
++| Not finished by the deadline | A protocol and a negative result with a mechanism (the selective pilot goes in an appendix or future work, labelled tentative) |
++
++The first study (D-019, pre-registered, confirmatory) already stands. Everything else strengthens it.
++
++## What the paper can claim today (from `CLAIMS.md`)
++
++- Supported: C-03 (alignment), C-07 (per-step overheads), C-09 (the meeting loss needs about 36% more FLOPs), C-12 (control F is nearly inert).
++- Refuted, reported as null results: C-01, C-08 (deep supervision).
++- Tentative, exploratory: C-10 (tuning noise), C-11 (crossing rule), C-13 (selective pilot), C-14 (gradient concentration).
++- Planned, with provisional wording: the mechanism checks (C-15 to C-20), the selective test and its controls (C-21 to C-24).
++
++## Split triggers (divide the paper only if one of these happens)
++
++1. **Different headline.** The selective backward test is SUPPORTED in two settings, becomes the headline, and the meeting-loss material (null result plus mechanism checks) would push the paper past the length or focus of a single contribution. Then: paper 1 = selective backward (with the protocol), paper 2 = the meeting-loss negative result with its mechanism.
++2. **A positive mechanism finding that needs its own confirmation.** For example check G0 ends DOSE HELPS or check B ends ORACLE HELPS, and a confirmatory study of the meeting loss becomes worthwhile. Then that study is a separate paper.
++3. **No shared section.** If the claims register splits into two sets that share nothing except the protocol, and the link measurement (check L) turns out uninformative.
++
++Without one of these, keep one paper. Re-check this list whenever a check or the selective test is logged.
++
++## Writing order (GUIDE section 7)
++
++Method and Setup now (stable). Related work as the reading is verified. Results as each finding is logged. Introduction and abstract last. Limitations continuously.
++
++## Venue (a thought, not a decision)
++
++A negative-results or reproducibility track, or a workshop on efficient training, fits the contribution. Revisit once the selective test and the second setting are known.
++
++## Housekeeping
++
++- Claims C-02, C-04 and C-06 depended on H1 being supported; they stay in the register (moot) and are not used in the text.
++- FIG-05 and FIG-06 were planned for the positive-claim version; keep them as planned only if the selective line needs a second setting or robustness table.
+diff --git a/paper/references.bib b/paper/references.bib
+index c5f5bed..b83210a 100644
+--- a/paper/references.bib
++++ b/paper/references.bib
+@@ -1,2 +1,89 @@
+ % Bibliography. Add an entry for every paper you cite, after verifying the details.
+ % Keys: firstauthorYEARword, e.g. lee2015dtp
++% Entries below come from docs/LITERATURE.md (read in full: lee2015dtp, bartunov2018scal, lee2015dsn,
++% rasmus2015ladder, schmidt2021crowded) or from a search (not read: the rest). Every entry still needs its
++% authors, venue and pages checked against the publisher or arXiv page BEFORE submission (checklist item).
++
++@inproceedings{lee2015dtp,
++  title = {Difference Target Propagation},
++  author = {Lee, Dong-Hyun and Zhang, Saizheng and Fischer, Asja and Bengio, Yoshua},
++  booktitle = {ECML PKDD},
++  year = {2015},
++  note = {arXiv:1412.7525. VERIFY venue and pages.}
++}
++
++@inproceedings{bartunov2018scal,
++  title = {Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures},
++  author = {Bartunov, Sergey and Santoro, Adam and Richards, Blake and Marris, Luke and Hinton, Geoffrey E. and Lillicrap, Timothy},
++  booktitle = {NeurIPS},
++  year = {2018},
++  note = {arXiv:1807.04587. VERIFY authors (LITERATURE.md lists a shorter author list) and venue.}
++}
++
++@inproceedings{lee2015dsn,
++  title = {Deeply-Supervised Nets},
++  author = {Lee, Chen-Yu and Xie, Saining and Gallagher, Patrick and Zhang, Zhengyou and Tu, Zhuowen},
++  booktitle = {AISTATS},
++  year = {2015},
++  note = {arXiv:1409.5185. VERIFY venue and pages.}
++}
++
++@inproceedings{rasmus2015ladder,
++  title = {Semi-Supervised Learning with Ladder Networks},
++  author = {Rasmus, Antti and Valpola, Harri and Honkala, Mikko and Berglund, Mathias and Raiko, Tapani},
++  booktitle = {NeurIPS},
++  year = {2015},
++  note = {arXiv:1507.02672. VERIFY venue and pages.}
++}
++
++@inproceedings{schmidt2021crowded,
++  title = {Descending through a Crowded Valley: Benchmarking Deep Learning Optimizers},
++  author = {Schmidt, Robin M. and Schneider, Frank and Hennig, Philipp},
++  booktitle = {ICML},
++  year = {2021},
++  note = {arXiv:2007.01547. VERIFY venue and pages.}
++}
++
++@inproceedings{meulemans2020tp,
++  title = {A Theoretical Framework for Target Propagation},
++  author = {Meulemans, Alexander and Carzaniga, Francesco S. and Suykens, Johan A. K. and Sacramento, Jo{\~a}o and Grewe, Benjamin F.},
++  booktitle = {NeurIPS},
++  year = {2020},
++  note = {arXiv:2006.14331. Found by search, NOT yet read. VERIFY everything.}
++}
++
++@misc{jiang2019biggestlosers,
++  title = {Accelerating Deep Learning by Focusing on the Biggest Losers},
++  author = {Jiang, Angela H. and others},
++  year = {2019},
++  note = {arXiv:1910.00762 (selective backprop). Title and arXiv number confirmed by search; only the abstract was seen. VERIFY full author list and venue; read before any claim.}
++}
++
++@inproceedings{shibuya2023fwdtp,
++  title = {Fixed-Weight Difference Target Propagation},
++  author = {Shibuya, Tatsukichi and others},
++  booktitle = {AAAI},
++  year = {2023},
++  note = {arXiv:2212.10352. Found by search, NOT yet read. VERIFY full author list.}
++}
++
++@inproceedings{nokland2016dfa,
++  title = {Direct Feedback Alignment Provides Learning in Deep Neural Networks},
++  author = {N{\o}kland, Arild},
++  booktitle = {NeurIPS},
++  year = {2016},
++  note = {arXiv:1609.01596. Found by search, NOT yet read.}
++}
++
++@misc{lillicrap2014random,
++  title = {Random feedback weights support learning in deep neural networks},
++  author = {Lillicrap, Timothy P. and others},
++  year = {2014},
++  note = {arXiv:1411.0247 (the journal version has a different title). Found by search, NOT yet read. VERIFY.}
++}
++
++% To find and verify before citing (not confirmed in this project yet):
++%  - Katharopoulos and Fleuret 2018, importance sampling with gradient norms
++%  - Loshchilov and Hutter 2015, online batch selection
++%  - Han and Yoo 2019 (arXiv:1901.01986), direct feedback alignment combined with backpropagation in CNNs
++%  - Jaderberg et al. 2017, synthetic gradients
+diff --git a/scripts/verify_regression.py b/scripts/verify_regression.py
+new file mode 100644
+index 0000000..c1e52d1
+--- /dev/null
++++ b/scripts/verify_regression.py
+@@ -0,0 +1,157 @@
++"""Regression check (E-002 style) after changes under src/ (DR-007): rerun one Stage 3 arm-A seed on the
++current code and compare the new run log with the original raw log.
++
++Rule (fixed in docs/notes/selective-backward-prereg-prep.md, Step 0, before the first use):
++  FAIL                      the evaluation steps differ, or the logged FLOPs differ at any evaluation
++                            (FLOP counts are deterministic, so any difference means the accounting changed),
++                            or the validation accuracy differs by more than --tol at any evaluation, or the
++                            steps-to-target (two consecutive evaluations, D-018) differ at 0.97 or 0.975
++  PASS (bit-identical)      the validation accuracy is identical at every evaluation (expected on the same
++                            machine and library versions)
++  PASS (within tolerance)   anything else that passes (expected across hardware or library versions)
++
++The rerun uses a temporary copy of the config with stage "verify-regression", so its log can never be
++mixed up with the Stage 3 final logs (analysis scripts select logs by stage name).
++
++Usage:
++  python scripts/verify_regression.py                       # rerun arm A seed 0 and compare
++  python scripts/verify_regression.py --new-log PATH        # compare an existing new log, no rerun
++Exit status 0 on PASS, 1 on FAIL.
++"""
++import argparse
++import glob
++import json
++import pathlib
++import subprocess
++import sys
++import tempfile
++
++ROOT = pathlib.Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT))
++
++from src.crossing import DEFAULT_CROSSING, crossing_index  # noqa: E402  (pure Python, no torch)
++
++TARGETS = (0.97, 0.975)
++TOL_ACC = 0.002
++
++
++def load_log(path):
++    """Return (header dict, list of evaluation rows). Evaluation rows have 'step' and 'val_acc'."""
++    header, rows = None, []
++    with open(path) as fh:
++        for line in fh:
++            line = line.strip()
++            if not line:
++                continue
++            rec = json.loads(line)
++            if rec.get("_header"):
++                header = rec
++            elif "step" in rec and "val_acc" in rec:
++                rows.append(rec)
++    return header, rows
++
++
++def steps_to_target(rows, target, rule=DEFAULT_CROSSING):
++    idx = crossing_index([r["val_acc"] for r in rows], target, rule)
++    return None if idx is None else rows[idx]["step"]
++
++
++def compare_logs(old_rows, new_rows, targets=TARGETS, tol=TOL_ACC):
++    """Compare two evaluation series. Returns a dict with the verdict and the reasons."""
++    out = {"n_old": len(old_rows), "n_new": len(new_rows), "reasons": []}
++    old_steps = [r["step"] for r in old_rows]
++    new_steps = [r["step"] for r in new_rows]
++    out["same_steps"] = old_steps == new_steps
++    if not out["same_steps"]:
++        out["reasons"].append("evaluation steps differ")
++        out["verdict"] = "FAIL"
++        return out
++    out["flops_identical"] = all(a.get("flops") == b.get("flops") for a, b in zip(old_rows, new_rows))
++    if not out["flops_identical"]:
++        out["reasons"].append("logged FLOPs differ at some evaluation (the FLOP accounting changed)")
++    diffs = [abs(a["val_acc"] - b["val_acc"]) for a, b in zip(old_rows, new_rows)]
++    out["max_abs_acc_diff"] = max(diffs) if diffs else 0.0
++    out["steps_to_target"] = {}
++    same_targets = True
++    for t in targets:
++        o, n = steps_to_target(old_rows, t), steps_to_target(new_rows, t)
++        out["steps_to_target"][t] = (o, n)
++        same_targets = same_targets and (o == n)
++    if out["max_abs_acc_diff"] > tol:
++        out["reasons"].append(f"max |val_acc difference| {out['max_abs_acc_diff']:.4f} exceeds {tol}")
++    if not same_targets:
++        out["reasons"].append("steps-to-target differ")
++    if out["reasons"]:
++        out["verdict"] = "FAIL"
++    elif out["max_abs_acc_diff"] == 0.0:
++        out["verdict"] = "PASS (bit-identical)"
++    else:
++        out["verdict"] = "PASS (within tolerance)"
++    return out
++
++
++def config_differences(old_header, new_header, ignore=("stage",)):
++    """Keys present in the original config whose values differ in the new config (new-only keys are ignored)."""
++    oc, nc = old_header["config"], new_header["config"]
++    return {k: (oc[k], nc.get(k)) for k in oc if k not in ignore and oc[k] != nc.get(k)}
++
++
++def rerun(config_path, seed):
++    import yaml  # imported here so the comparison functions work without it
++    cfg = yaml.safe_load(open(config_path))
++    cfg["stage"] = "verify-regression"
++    cfg["seed"] = seed
++    with tempfile.TemporaryDirectory() as tmp:
++        tmp_cfg = pathlib.Path(tmp) / "verify_regression.yaml"
++        tmp_cfg.write_text(yaml.safe_dump(cfg))
++        subprocess.run([sys.executable, "-m", "src.train", "--config", str(tmp_cfg), "--seed", str(seed)],
++                       cwd=ROOT, check=True)
++    logs = sorted(glob.glob(str(ROOT / "results" / "raw" / f"*verify-regression_{cfg['arm']}_s{seed}.jsonl")),
++                  key=lambda p: pathlib.Path(p).stat().st_mtime)
++    if not logs:
++        raise SystemExit("rerun finished but no verify-regression log was found in results/raw")
++    return logs[-1]
++
++
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--config", default="configs/tuned/t1_base_two.yaml")
++    ap.add_argument("--seed", type=int, default=0)
++    ap.add_argument("--old-log", default=None, help="default: the Stage 3 final log of this arm and seed")
++    ap.add_argument("--new-log", default=None, help="compare this existing log instead of rerunning")
++    ap.add_argument("--tol", type=float, default=TOL_ACC)
++    args = ap.parse_args()
++
++    old_path = args.old_log
++    if old_path is None:
++        found = sorted(glob.glob(str(ROOT / "results" / "raw" / f"*final-t1-base-two_base_s{args.seed}.jsonl")))
++        if not found:
++            raise SystemExit(f"no Stage 3 log for arm A seed {args.seed}; pass --old-log")
++        old_path = found[0]
++    new_path = args.new_log or rerun(args.config, args.seed)
++
++    old_h, old_rows = load_log(old_path)
++    new_h, new_rows = load_log(new_path)
++    res = compare_logs(old_rows, new_rows, tol=args.tol)
++
++    print(f"old log : {old_path}")
++    print(f"new log : {new_path}")
++    if old_h and new_h:
++        print(f"commits : old {str(old_h.get('git_commit'))[:8]}  new {str(new_h.get('git_commit'))[:8]}"
++              f"  (new git_dirty={new_h.get('git_dirty')})")
++        diff = config_differences(old_h, new_h)
++        print("config differences (old, new):", diff if diff else "none")
++    print(f"evaluations: old {res['n_old']}, new {res['n_new']}; same steps: {res['same_steps']}")
++    if res["same_steps"]:
++        print(f"FLOPs identical at every evaluation: {res['flops_identical']}")
++        print(f"max |val_acc difference|: {res['max_abs_acc_diff']:.6f} (tolerance {args.tol})")
++        for t, (o, n) in res["steps_to_target"].items():
++            print(f"steps to {t}: old {o}, new {n}")
++    for r in res["reasons"]:
++        print("reason:", r)
++    print("VERDICT:", res["verdict"])
++    sys.exit(0 if res["verdict"].startswith("PASS") else 1)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/test_verify_regression.py b/tests/test_verify_regression.py
+new file mode 100644
+index 0000000..8733ab2
+--- /dev/null
++++ b/tests/test_verify_regression.py
+@@ -0,0 +1,72 @@
++"""Tests for the regression-check script (scripts/verify_regression.py); no torch needed."""
++import json
++
++from scripts_loader import load_script
++
++vr = load_script("verify_regression")
++
++
++def rows(accs, step0=50, every=50, fps=1000):
++    return [{"step": step0 + i * every, "flops": fps * (step0 + i * every), "val_acc": a} for i, a in enumerate(accs)]
++
++
++ACCS = [0.90, 0.95, 0.968, 0.971, 0.972, 0.976, 0.976, 0.978]
++
++
++def test_identical_logs_pass_bit_identical():
++    r = vr.compare_logs(rows(ACCS), rows(ACCS))
++    assert r["verdict"] == "PASS (bit-identical)" and r["max_abs_acc_diff"] == 0.0
++
++
++def test_small_noise_passes_within_tolerance():
++    noisy = [a + (0.0005 if i % 2 else -0.0005) for i, a in enumerate(ACCS)]
++    r = vr.compare_logs(rows(ACCS), rows(noisy))
++    assert r["verdict"] == "PASS (within tolerance)"
++
++
++def test_large_difference_fails():
++    bad = list(ACCS)
++    bad[3] = 0.90
++    r = vr.compare_logs(rows(ACCS), rows(bad))
++    assert r["verdict"] == "FAIL" and any("exceeds" in x for x in r["reasons"])
++
++
++def test_flops_difference_fails_even_if_accuracy_identical():
++    new = rows(ACCS)
++    new[4]["flops"] += 1
++    r = vr.compare_logs(rows(ACCS), new)
++    assert r["verdict"] == "FAIL" and any("FLOP" in x for x in r["reasons"])
++
++
++def test_different_steps_fail():
++    r = vr.compare_logs(rows(ACCS), rows(ACCS[:-1]))
++    assert r["verdict"] == "FAIL" and not r["same_steps"]
++
++
++def test_steps_to_target_use_two_consecutive_rule():
++    # 0.971 at index 3 and 0.972 at index 4: crosses 0.97 at index 3 (step 200); 0.975 at indices 5 and 6 (step 300)
++    r = vr.compare_logs(rows(ACCS), rows(ACCS))
++    assert r["steps_to_target"][0.97] == (200, 200)
++    assert r["steps_to_target"][0.975] == (300, 300)
++
++
++def test_tolerance_pass_requires_same_steps_to_target():
++    # a tiny change that moves the crossing from step 200 to later must fail even inside the accuracy tolerance
++    new = list(ACCS)
++    new[3] = 0.9695
++    r = vr.compare_logs(rows(ACCS), rows(new))
++    assert r["verdict"] == "FAIL" and any("steps-to-target" in x for x in r["reasons"])
++
++
++def test_load_log_skips_header_and_blank_lines(tmp_path):
++    p = tmp_path / "x.jsonl"
++    p.write_text(json.dumps({"_header": True, "config": {"a": 1}}) + "\n\n" +
++                 json.dumps({"step": 50, "flops": 5, "val_acc": 0.9}) + "\n")
++    h, rs = vr.load_log(p)
++    assert h["config"] == {"a": 1} and len(rs) == 1
++
++
++def test_config_differences_ignores_stage_and_new_keys():
++    old = {"config": {"stage": "a", "lr": 0.1, "arm": "base"}}
++    new = {"config": {"stage": "b", "lr": 0.2, "arm": "base", "sel_frac": 0.3}}
++    assert vr.config_differences(old, new) == {"lr": (0.1, 0.2)}
+-- 
+2.43.0
+
