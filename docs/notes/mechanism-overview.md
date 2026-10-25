@@ -92,3 +92,5 @@ Suggested working order: Step 0 of track S, then check A + L + G0, then the thre
 ## Log
 
 Add an `exploratory` entry in `EXPERIMENT_LOG.md` per check (next free E-IDs), with the printed verdict.
+
+- 2026-10-25, checks A and L: Q1 NOT REDUNDANT (probe caveat), Q2 NO, Q3 GN DIFFERS, L ALREADY SELECTIVE (E-012, F-013). Next in the suggested order: check G0, then the three looks of track S.

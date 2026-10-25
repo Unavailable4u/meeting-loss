@@ -81,3 +81,7 @@ Writes `results/processed/mechanism_a_ma1.csv` (one row per seed, step, quantity
 3. For a linear top half (identity activation) `J` is constant; check that `u_pinv` solves `S J u = e_y - p`, that the Gauss-Newton step equals `u_pinv`, and that `u_lsq` equals the damped form `(J^T J + alpha I)^-1 J^T (e_y - p)` (all in `tests/test_mechanism.py`).
 4. `g_perp` is orthogonal to `g_task` to numerical precision, and `g_par + g_perp = g_meet`.
 5. Measuring does not change the training log (same run with and without checkpoints).
+
+## Result (2026-10-25, E-012; added after the run, the rule above is unchanged)
+
+Verdicts by the rule: **Q1 NOT REDUNDANT, Q2 NO, Q3 GN DIFFERS**. Numbers and reading in E-012 and F-013. One limitation found after the run, recorded here and not used to change the rule: the one-step probe of Q1 (a step of 1% of `||theta_low||`) overshoots late in training, because the step along `-g_task` itself increases the loss in 5 of the 6 seed-steps at 1000 and 2000; at step 500, where it decreases the loss, the orthogonal part is 5.5% of the task effect. The Q1 verdict is therefore "not shown redundant by this probe". A smaller probe step (for example 0.1%), chosen before looking at a new run, would be needed to settle it; that is optional and exploratory.

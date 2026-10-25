@@ -66,6 +66,8 @@ Include it in `prereg-v2` **only if** check L (`linking-measurement-concentratio
 4. **Second setting:** an MLP on Fashion-MNIST or flattened CIFAR-10 (the hand-written backward probably carries over; check the input dimension handling). It needs **its own tuned baseline** (a 25-trial, 2-seed tuning of A in that setting, same rules). A CNN needs a new backward pass and can come later.
 5. **Wall-clock** as a pre-registered secondary outcome (Look 1's protocol).
 
+**Update (2026-10-25, E-012):** check L ended ALREADY SELECTIVE, so by the rule above the hybrid arm is skipped in `prereg-v2`.
+
 ## Draft hypothesis for `HYPOTHESES.md` (edit before use)
 
 > **H7 (draft).** In the MNIST MLP setting of D-008, the selective backward arm S at `sel_frac` = *[from Look 3]*, inheriting the hyperparameters of the tuned baseline A1, reaches validation accuracy 0.97 and 0.975 with at least 15% fewer FLOPs (counted as in `src/flops.py`) than the best of A1, A2, a fresh independent tuning of A, and the best small-batch baseline, on 20 paired seeds. **Supported / refuted / inconclusive** by the rule of D-019 (margin 15%, noise floor from the baseline tunings, both targets must agree).
