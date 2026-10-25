@@ -4,7 +4,7 @@
 
 ## The idea being checked
 
-The meeting loss was sold as a **shorter signal path** to the lower layers. In the current 784-256-128-256-10 MLP the path from the output to the middle state is only two weight layers, so there is almost nothing to shortcut. Gains from a shortcut should appear where backprop's own signal degrades: a deep plain network (no residuals, no normalization). Two further limits of E-008 are covered at the same time: H4's optimizer requirement (AdamW normalizes the scale of an added gradient; SGD with momentum does not, R-19) and the comparison with **deep supervision (arm B)**, which gives the lower layers the same kind of shortcut. The meeting loss must beat B here to be interesting.
+The meeting loss was sold as a **shorter signal path** to the lower layers. In the current 784-256-128-256-10 MLP the path from the output to the middle state is only two weight layers, so there is almost nothing to shortcut. Gains from a shortcut should appear where backprop's own signal degrades: a deep plain network (no residuals, no normalization). Two further limits of E-008 are covered at the same time: H4's optimizer requirement (AdamW normalizes the scale of an added gradient; SGD with momentum does not, R-19) and the comparison with **deep supervision (arm B)**, which gives the lower layers the same kind of shortcut. The meeting loss must beat B here to be interesting. The strength of the signal is a tuned `lam_meet` here (wide range, because scale matters under SGD); the normalized dose `rho` is the subject of check G0 (`mechanism-dose-response.md`) and can be added as a second D arm if G0 shows a dose effect.
 
 ## Setting
 
@@ -31,7 +31,7 @@ A, B, D, `F'`, A2 on 10 seeds each (50 runs). Tag `prereg-v3` before the first f
 ## Decision rule (D vs A and D vs B; paired percentage change of mean FLOPs-to-target, same bootstrap as D-019 with a 97.5% interval because two comparisons share the error budget; both targets must agree)
 
 - **SUPPORTED:** D vs A is *supported* under the D-019 rule (point at most -15%, interval excludes 0, gain larger than the A2-versus-A shift) at both targets, **and** D vs B has a point estimate below 0 with the interval excluding 0 at both targets.
-- **REFUTED:** D vs A is *refuted* under the D-019 rule (the interval excludes a 15% gain) at both targets, whatever B does.
+- **REFUTED (does not support the premise in this setup):** D vs A is *refuted* under the D-019 rule (the interval excludes a 15% gain) at both targets, whatever B does. One exploratory design cannot prove a negative; read this label as "no support here".
 - **INCONCLUSIVE:** anything else.
 
 Descriptive and never deciding: `F'` (is the effect only a rescale?), steps-to-target and the final accuracy, the per-layer gradient norms of every arm, the share of runs that never reach a target, A2's shift.
@@ -39,7 +39,7 @@ Descriptive and never deciding: `F'` (is the effect only a rescale?), steps-to-t
 ## What each outcome leads to
 
 - **SUPPORTED:** the premise holds where backprop is weak. Write a new pre-registered confirmatory test on fresh seeds (D-015); do not claim it from this check.
-- **REFUTED:** the signal does not help even where backprop is weak, in this setup. Together with B this closes the line for plain MLPs.
+- **REFUTED:** no support for the premise even where backprop is weak, in this setup. Together with B and G0 this is evidence against the premise for plain MLPs; it is not proof, and `G` mirroring `F_up` is one design among several.
 - **INCONCLUSIVE:** report as such. If B beats A and D does not, report that deep supervision is the shortcut that works here (and that H6 gets a second, independent look).
 - **Probe says the weak-backprop premise could not be met:** the result applies only to the depth tested; say so in the paper.
 
