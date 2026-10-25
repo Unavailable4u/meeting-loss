@@ -60,3 +60,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: D-021 (proposed; D-020 stays reserved for the gate / Stage 4 decision)
 - Docs updated: [x] PLAN  [ ] HYPOTHESES (no hypothesis yet; a test needs a new one before `prereg-v2`)  [ ] METHOD (not changed: the new arm is described in `docs/notes/selective-backward-pilot.md`)  [x] FINDINGS (F-012)  [ ] LITERATURE (citations still to verify)  [ ] RISKS  [ ] CLAIMS (none)  [ ] PAPER_DRAFT  [ ] FIGURES
 - Experiments invalidated or needing rerun: none. Evidence that the old arms are unchanged: the full test suite passes (87 tests, of which 66 predate the change); the pilot's arm A logged 465.2 GFLOPs over 3,000 steps, which equals 3,000 times the pre-existing analytic count of 155,058,176 per step. Not yet done: rerun one Stage 3 arm-A seed on the current code and compare its validation curve with its raw log (a verification entry, E-002 style).
+
+## DR-008: Paper reframed from a positive-claim study to a protocol, a negative result with its mechanism, and a conditional selective-backward result; claims register extended
+- Date: 2026-10-25
+- Trigger: GUIDE Section 4 trigger 9 (pivot) for the paper: the Stage 3 outcome (H1 and H6 refuted) removed the premise of the original draft skeleton
+- What changed: before: `paper/PAPER_DRAFT.md` was a skeleton for a positive efficiency claim (claims C-01, C-02, C-04, C-06). After: one living draft whose headline does not depend on a positive result, `paper/PAPER_PLAN.md` (one paper and the split triggers), claims C-10 to C-25 added to `paper/CLAIMS.md` (existing rows C-01 to C-09 unchanged), figures FIG-07 to FIG-10 planned, bibliography entries added (each marked for verification). No experiment, hypothesis, threshold, seed set or tuned config was changed.
+- Decision recorded: D-020 (proposed)
+- Docs updated: [ ] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS  [ ] LITERATURE (citations still to verify)  [ ] RISKS  [x] CLAIMS  [x] PAPER_DRAFT  [x] FIGURES
+- Experiments invalidated or needing rerun: none.

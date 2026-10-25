@@ -202,3 +202,16 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 - Alternatives considered: stopping at the pilot; tuning S first (the rule says TUNE only when the verdict is not GO); going straight to the Stage 4 checks of D-020.
 - Consequences: a confirmatory test needs a new hypothesis in `docs/HYPOTHESES.md`, a lock tag, and an updated lock check in `scripts/run_final.py` (it is tied to `prereg-v1`). Until then every statement about arm S is conditional on the pilot's scope: 3 seeds, one MLP, A's hyperparameters, FLOPs not wall-clock (R-21 applies).
 - Evidence: E-009, E-010, F-012; `docs/notes/selective-backward-pilot.md`.
+
+## D-020: After Stage 3: keep both lines in one project and one paper; run the Stage 4 mechanism checks and the selective-backward preparation; proposed, nothing below is accepted until the researcher marks it
+- Date: 2026-10-25
+- Status: **proposed**. Drafted by the assistant for review. D-021 (selective backward) stays proposed and its OPEN items stay open until the preparation in `docs/notes/selective-backward-prereg-prep.md` is done.
+- Context: Stage 3 gave a pre-registered null result for the meeting loss (H1 refuted, E-008) and a null for deep supervision (H6 refuted). The gradient-concentration check (E-009) and the pilot of selective backward (E-010) are exploratory leads. Plans for the mechanism checks and the link measurement are in `docs/notes/mechanism-overview.md`.
+- Decision (proposed):
+  1. **One project and one paper.** The two lines answer the same question under the same protocol and the claims do not strain each other (`paper/PAPER_PLAN.md`). Split only if a trigger written there happens.
+  2. **Stage 4 = mechanism diagnostics**, all `exploratory` (D-015): checks A, L, G0 first, then B and D, then C; the fixes for `G` and cost (Gate 3) are deferred and blocked until a step reduction is shown.
+  3. **Selective line:** the regression check, the three exploratory looks (wall-clock, small batch, `sel_frac` curve), then a pre-registered `prereg-v2`. Prior work (Jiang et al. 2019) is credited; the contribution is the compute-matched test.
+  4. **The paper does not depend on the selective result.** If it fails or is not finished, the paper is the protocol plus the negative result with its mechanism.
+- Alternatives considered: stopping at the Stage 3 null; only the selective line; splitting into two papers now; the meeting-loss and selective-backward hybrid as a method (kept only as an optional exploratory arm, gated by check L).
+- Consequences: new notes under `docs/notes/`; changes under `src/` need drift entries; each check logs an `exploratory` experiment; the paper draft and claims register were restructured (DR-008).
+- Evidence: E-008, E-009, E-010, F-009 to F-012; `docs/notes/mechanism-overview.md`; `paper/PAPER_PLAN.md`.

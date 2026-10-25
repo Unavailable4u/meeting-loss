@@ -10,3 +10,7 @@ Every figure or table in the paper maps to a script and its data. Figures are re
 | FIG-04 | Ablation table (no L_inv, frozen random G, no warm-up, meeting depth, G size, distance) | scripts/make_figures.py (to write) | results/raw/ (Stage 4) | Sec. 6 | planned |
 | FIG-05 | Generalization: CIFAR-10 and modular-arithmetic results | scripts/make_figures.py (to write) | results/raw/ (Stage 5) | Sec. 5.3 | planned |
 | FIG-06 | Robustness and scale table (batch size, optimizer, width, depth, 4x scale) | scripts/make_figures.py (to write) | results/raw/ (Stage 6) | Sec. 5.4 | planned |
+| FIG-07 | Share of the gradient norm carried by the top-loss rows versus step, for the task gradient (arm A and D) and the meeting gradient (check L) | scripts/make_figures.py (to write) | results/processed/linking_*.csv, gradient_concentration_gc1.csv | Sec. 5.4, 6 | planned |
+| FIG-08 | FLOPs-to-target of selective backward (S30, S50, random control) against the tuned baselines, with paired intervals | scripts/make_figures.py (to write) | results/raw/ (prereg-v2), pilot_selective_pilot1.csv for the pilot | Sec. 5.4 | planned |
+| FIG-09 | Dose-response curve of the learned meeting loss (steps-to-target versus rho) | scripts/make_figures.py (to write) | results/processed/dose_response_*.csv | Sec. 6 | planned |
+| FIG-10 | Parallel/orthogonal split and Gauss-Newton cosines over training (check A) | scripts/make_figures.py (to write) | results/processed/mechanism_a_*.csv | Sec. 6 | planned |
