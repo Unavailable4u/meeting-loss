@@ -68,3 +68,7 @@ Template; extend `scripts/mechanism_check.py` from check A with a `--with-linkin
 2. The row-restricted gradient equals the sum of the per-row gradients over `Sel` (check against per-example autograd on a tiny batch).
 3. On arm A the task-gradient norm share reproduces the E-009 values within noise for the same checkpoint.
 4. Measuring does not change the training log.
+
+## Result (2026-10-25, E-012; added after the run, the rule above is unchanged)
+
+Verdict: **ALREADY SELECTIVE** (meeting-gradient norm share in the top-30% rows 0.968, 0.985, 0.987 at steps 500, 1000, 2000; loss correlation 0.993 at all three). Consequence by the rule: the hybrid arm (meeting loss on the selected rows) is **not** added to `prereg-v2`. Numbers and scope in E-012 and F-013.

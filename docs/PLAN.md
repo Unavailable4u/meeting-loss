@@ -1,6 +1,6 @@
 # Plan
 
-**Last updated:** 2026-10-25 (Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
+**Last updated:** 2026-10-25 (checks A and L done, E-012, F-013; D-020 accepted; Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 3 finished; the gate decision is open (see below)
 
@@ -12,9 +12,9 @@ Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% 
 
 ## Next three actions
 
-1. **Choose the direction after the gate** and record it as a decision (D-020, with a drift entry if the plan changes). Options in the guide: (a) Stage 4 diagnostics and ablations that explain the null (why does a well-aligned target add nothing next to backpropagation? e.g. SGD instead of AdamW, a weaker or absent backprop path, a different layer); (b) a variant design that makes the backward path matter more; (c) switch to another idea from the idea bank; (d) write the result up as a negative-result paper or workshop submission, which Stage 3 already supports (C-09).
-2. Whatever is chosen, any new claim needs a planned confirmatory run on fresh seeds (D-015). Deep supervision's lead against the second baseline tuning and at 0.98 (F-010, F-011) is the only positive lead, and it is exploratory. The reference baseline must be fixed before such a run (R-21).
-3. Regardless of the choice: regenerate the figures from `results/raw/` (`make_figures.py` is still to be written), and keep the paper's setup section in line with D-018, D-019 and the scope in R-21.
+1. **Check G0** (fixed-hyperparameter dose-response of the learned loss, `docs/notes/mechanism-dose-response.md`): needs the `meet_rho` arm and `scripts/run_dose_response.py`, a change under `src/` that needs a drift entry stating that no Stage 3 arm changes, and the regression check (`scripts/verify_regression.py`) afterwards. D-020 was accepted on 2026-10-25, so the order of `mechanism-overview.md` applies: G0, then the three looks of track S (wall-clock, small batch, `sel_frac` curve; not while a sweep is running), then checks B and D.
+2. **Decide D-022** (further tunings of arm A, t5 to t8; open items: number of tunings, the reference baseline of H7, whether B and S are tuned as often) and D-021's open items before `prereg-v2` is written.
+3. Keep the figures and the paper draft in line with the evidence: `make_figures.py` is still to be written; C-15 and C-16 now rest on E-012 (exploratory, status weak). Checks A and L ended Q1 NOT REDUNDANT (probe caveat), Q2 NO, Q3 GN DIFFERS, L ALREADY SELECTIVE, so the hybrid arm is not added to `prereg-v2`.
 
 ## Stage table
 
