@@ -7,6 +7,8 @@ worth building. Plan and decision rule (written before the run): docs/notes/sele
 
 Usage:
   python scripts/pilot_selective.py --tag pilot1                 # real run: 4 variants x 3 seeds x 3,000 steps
+  python scripts/pilot_selective.py --tag sf1 --sel-fracs 0.1 0.2 0.3 0.5 --seeds 1210 1211 1212
+                                                                 # Look 3 (docs/notes/selective-backward-prereg-prep.md): the sel_frac curve and its knee
   python scripts/pilot_selective.py --synthetic --seeds 0 --max-steps 200 --variants S30 --tag smoke \
          --out-dir /tmp/pilot --csv /tmp/pilot.csv                # plumbing test, no MNIST
 """
@@ -24,6 +26,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+from exploratory.looks import frac_name, knee  # noqa: E402
 from src.crossing import crossing_index  # noqa: E402
 from src.sweep import _git_info, config_hash  # noqa: E402
 from src.train import run  # noqa: E402
@@ -143,6 +146,8 @@ def main(argv=None):
     ap.add_argument("--config", default="configs/tuned/t1_base_two.yaml")
     ap.add_argument("--seeds", type=int, nargs="+", default=[600, 601, 602])
     ap.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=list(VARIANTS))
+    ap.add_argument("--sel-fracs", type=float, nargs="+", default=None,
+                    help="Look 3: run selection fractions (top-loss rows, sel_warmup 100) instead of --variants; reports the knee")
     ap.add_argument("--max-steps", type=int, default=None)
     ap.add_argument("--tag", default="pilot1")
     ap.add_argument("--out-dir", default=None)
@@ -155,9 +160,15 @@ def main(argv=None):
         base["max_steps"] = args.max_steps
     device = "cpu" if base.get("device", "auto") == "auto" else base["device"]
     out_dir = pathlib.Path(args.out_dir or REPO / "results" / "raw" / "pilot" / args.tag)
+    variants, fracs = list(args.variants), None
+    if args.sel_fracs:
+        fracs = {frac_name(f): f for f in args.sel_fracs}
+        for n, f in fracs.items():
+            VARIANTS.setdefault(n, dict(arm="selective", sel_frac=f, sel_warmup=100, sel_mode="top"))
+        variants = list(fracs)
 
     for seed in args.seeds:
-        for name in ["A"] + args.variants:
+        for name in ["A"] + variants:
             path = out_dir / f"{name}_s{seed}.jsonl"
             if path.exists():
                 print(f"skip {path.name} (exists)")
@@ -167,12 +178,19 @@ def main(argv=None):
             print(f"run {name} seed {seed} ({cfg['arm']}, {cfg['max_steps']} steps)", flush=True)
             write_run(path, cfg, run(cfg, device, data=data))
 
-    runs = {k: v for k, v in load_all(out_dir).items() if k == "A" or k in args.variants}
+    runs = {k: v for k, v in load_all(out_dir).items() if k == "A" or k in variants}
     summary = summarize(runs)
     print_summary(summary)
-    verdict = pilot_verdict(summary)
-    print(f"\nPre-registered pilot rule: GO if S30 or S50 has FLOPs-to-target <= {GO_RATIO} x A at BOTH targets with no missed seed; "
-          f"STOP if both have ratio >= {STOP_RATIO} at 0.975 or 2+ missed seeds; otherwise TUNE.\nVERDICT: {verdict}\n")
+    if fracs:
+        verdict = knee(summary, fracs)
+        print("\nLook 3 (descriptive; the pre-registered pilot rule is not applied here). Per-step cost is fixed by sel_frac: "
+              "the forward pass of the whole batch is 44.4% of arm A's step, so no selection can save more than about 56% per step.")
+        print(f"Knee = smallest sel_frac with ratio <= 0.85 at both targets and no missed seed: "
+              f"{verdict if verdict is not None else 'none among ' + str(sorted(fracs.values()))}\n")
+    else:
+        verdict = pilot_verdict(summary)
+        print(f"\nPre-registered pilot rule: GO if S30 or S50 has FLOPs-to-target <= {GO_RATIO} x A at BOTH targets with no missed seed; "
+              f"STOP if both have ratio >= {STOP_RATIO} at 0.975 or 2+ missed seeds; otherwise TUNE.\nVERDICT: {verdict}\n")
     csv_path = pathlib.Path(args.csv or REPO / "results" / "processed" / f"pilot_selective_{args.tag}.csv")
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with open(csv_path, "w", newline="") as fh:

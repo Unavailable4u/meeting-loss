@@ -54,6 +54,14 @@ Also report whether S30 still beats the best small-batch arm by at least 15% (ra
 
 The forward pass is 44.4% of A's cost, so **no selection can save more than about 56% per step**; the useful range is bounded. Metric: FLOPs ratio and steps ratio versus A at both targets, and misses. Descriptive, with one rule: the **knee** is the smallest `sel_frac` whose ratio is at most 0.85 at both targets with no missed seed. State it in the log and use it, with 0.3, as the pre-registered `sel_frac` candidates (at most two values in the final test).
 
+## Clarifications for the implementation (2026-10-26, written before the three looks run; no rule above is changed)
+
+**Look 1.** The timed step is the whole training step (zero_grad, forward, backward, optimizer and scheduler) on 100 batches prefetched to the device and cycled, so data loading is not timed. The 200 warm-up steps also cover S30's 100 full-backward steps, so the timed steps are all selective. The repeats alternate the order of the two variants (A then S30, S30 then A, ...) to cancel drift. The **verdict uses one torch thread** (the project convention, E-011); torch's default thread count is timed as well and reported as a second, descriptive reading. The device is reported with the result.
+
+**Look 2.** Evaluation spacing is kept at about the same number of samples as arm A (every 50 steps of 128): every 200, 133 and 100 steps for batch 32, 48 and 64. The 8 learning rates per batch size are drawn log-uniformly in [3e-4, 5e-3] by a generator seeded from the tag and the batch size (so the design is reproducible and written to `configs/looks/<tag>/` before any run). All other settings are arm A's tuned config (relu, AdamW, cosine schedule over the scaled horizon, weight decay). A tuning trial is scored by the mean over its two seeds of the FLOPs to reach 0.97 under the two-consecutive rule, a miss at its full-run FLOPs, ties to the higher late validation accuracy, then the lower trial index (the D-017 mechanics, with the target 0.97 as written above). The **best small-batch arm** is the one with the lowest worst-case ratio (the larger of its ratios at 0.97 and 0.975). The ratio of an arm is the mean FLOPs-to-target over arm A's, on the three evaluation seeds. The FLOP counter measures the actual batch, so FLOPs scale with the batch size.
+
+**Look 3.** The variants are named S10, S20, S30 and S50 (top-loss rows, `sel_warmup` 100, arm A's tuned hyperparameters). The knee rule is applied as written; the pilot's GO/STOP/TUNE rule is not applied in this mode.
+
 ## The hybrid arm (meeting loss on the selected rows)
 
 Include it in `prereg-v2` **only if** check L (`linking-measurement-concentration.md`) ends NOT SELECTIVE or PARTIAL. If it ends ALREADY SELECTIVE, skip it (predicted null, no information). If included: one arm, labeled exploratory, with the expectation "null" written before the run, outside the primary hypothesis and outside the multiplicity of the primary comparison.
@@ -89,10 +97,10 @@ Jiang et al. 2019, "Accelerating Deep Learning by Focusing on the Biggest Losers
 ```
 python -m pytest -q
 git add -A && git commit -m "..." && git push        # BEFORE the looks
-python -m src.train --config configs/tuned/t1_base_two.yaml --seed 0     # Step 0 regression
-python scripts/time_selective.py --tag sw1                                # Look 1
-python scripts/run_batch_control.py --tag sb1                             # Look 2
-python scripts/pilot_selective.py --tag sf1 --sel-fracs 0.1 0.2 0.3 0.5 --seeds 1210 1211 1212   # Look 3
+python scripts/verify_regression.py                                        # Step 0 regression (done, E-011)
+python scripts/time_selective.py --tag sw1                                # Look 1 (a few minutes)
+python scripts/run_batch_control.py --tag sb1 --workers 4                 # Look 2 (63 runs, resumable)
+python scripts/pilot_selective.py --tag sf1 --sel-fracs 0.1 0.2 0.3 0.5 --seeds 1210 1211 1212   # Look 3 (15 runs)
 ```
 
-Templates; check `scripts/pilot_selective.py` for the real options (it may need a `--sel-fracs` or `--seeds` option, and its variants are currently fixed). Log each look as an `exploratory` entry in `EXPERIMENT_LOG.md`.
+The scripts exist (`scripts/time_selective.py`, `scripts/run_batch_control.py`, `scripts/pilot_selective.py --sel-fracs`; logic in `exploratory/looks.py`, tests in `tests/test_looks.py` and `tests/test_time_selective.py`). Log each look as an `exploratory` entry in `EXPERIMENT_LOG.md`.
