@@ -10,3 +10,4 @@ wandb/
 # NOTE: results/raw/ is committed on purpose (append-only record of every run).
 sweep_*.log
 final_*.log
+*.patch
