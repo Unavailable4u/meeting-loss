@@ -20,7 +20,7 @@ Three claims, of different kinds, if the plans go well: (1) a reproducible proto
 | `mechanism-a-direction-geometry.md` (check A) | Parallel/orthogonal split and Gauss-Newton cosine of the meeting signal | 3 runs of arm D, measurement only |
 | `linking-measurement-concentration.md` (check L) | E-009 concentration analysis on the meeting gradient (selected vs unselected rows) | shares A's runs, plus 3 runs of arm A |
 | `mechanism-dose-response.md` (check G0) | Fixed-hyperparameter dose-response of the learned loss, with rho (relative gradient norm) as the dose | 50 runs, no tuning |
-| `mechanism-b-oracle-arm.md` (check B) | Oracle targets (pinv, Gauss-Newton, damped logit-space) plus the scaled-gradient control, cost ignored | oracle arms |
+| `mechanism-b-oracle-arm.md` (check B) | Oracle targets (pinv = Gauss-Newton, damped logit-space) plus the scaled-gradient control, cost ignored | oracle arms |
 | `mechanism-d-replacement-test.md` (check D) | Is the meeting signal sufficient to train the lower half with backprop cut? | replacement arms |
 | `mechanism-c-deep-network-sgd.md` (check C) | Deep plain MLP, SGD with momentum, against deep supervision | a small Stage-3-style study |
 | `mechanism-g-and-cost-deferred.md` (Gate 3) | Fixes for G's quality and cost; **blocked** until a step reduction is shown | none until the gate opens |
@@ -29,7 +29,7 @@ Three claims, of different kinds, if the plans go well: (1) a reproducible proto
 ## Gates and order
 
 - **Gate 0 (cheap, first):** check A, check L, check G0. They reuse existing code and need no new network structure. A and L share the same training runs.
-- **Gate 1:** check B (needs A's Jacobian code; A's Q3 tells you whether the Gauss-Newton arm is worth running) and check D (reuses B's oracle). Run G0 before B so the dose interpretation is known.
+- **Gate 1:** check B (needs A's Jacobian code; A's Q3 tells you whether the pinv (Gauss-Newton) oracle adds anything beyond the scaled-gradient control) and check D (reuses B's oracle). Run G0 before B so the dose interpretation is known.
 - **Gate 2:** check C (largest; independent of the others and may be started in parallel).
 - **Gate 3 (deferred):** `mechanism-g-and-cost-deferred.md`. Opens only if G0, B or C shows a step reduction large enough to pay the overhead: about 31% fewer steps for +23% per step, 24% for +12%, 20% for +6% (0.85 divided by 1 plus the overhead). If no gate opens, the mechanism result is the contribution and Gate 3 is not run.
 - **Track S (independent of the gates above, start it first):** `selective-backward-prereg-prep.md`: regression check, then the three looks, then the decisions and `prereg-v2`. It is the main line for a positive result.
@@ -57,7 +57,7 @@ Suggested working order: Step 0 of track S, then check A + L + G0, then the thre
 | `prereg-v2` final (reserved) | 1300 to 1319 |
 
 - **Threads.** A comparison with earlier logs is only meaningful at the same torch thread count (E-011): the Stage 3 runs used `torch.set_num_threads(1)` in each worker. Every new runner or script that trains must set one thread by default (or record the thread count in the run header) and say so in its log entry.
-- **Tuning tags.** `t3` (check C), `t4` (check D); use `t5` for a fresh independent tuning of A in `prereg-v2`.
+- **Tuning tags.** `t3` (check C), `t4` (check D); `t5` to `t8` are the further tunings of arm A proposed in D-022 (`docs/notes/baseline-tunings-plan.md`), which also serve as the independent baseline tunings of `prereg-v2`.
 - **Metric** where a comparison is made: steps-to-target and FLOPs-to-target under the D-018 rule (two consecutive evaluations at or above the target). A run that never reaches a target is recorded with its full-run steps and FLOPs and counted in `n_never`; never dropped. Targets 0.97 and 0.975 (C uses 0.95 and 0.97).
 - **Reference baselines:** both tunings of arm A (`t1_base_two.yaml` = A, `t2_base_two.yaml` = A2); fixed-hyperparameter designs (G0) remove tuning noise by construction and are conditional on A's tuned settings, which favour the baseline.
 - **Statistics:** paired percentage change by seed with a bootstrap interval, as in `src/sweep.py` and `scripts/analyze.py compare` (check the signatures before reuse).

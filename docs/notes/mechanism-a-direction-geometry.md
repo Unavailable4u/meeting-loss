@@ -18,15 +18,16 @@ Per example `i`: `z` logits, `p = softmax(z)`, `r = p - e_y`, `J = dz/dh` (10 x 
 | `u_bp` | `-J^T r` | what backprop sends to h |
 | `u_meet` | `G(e_y) - G(p)` (arm D's actual G) | what the meeting loss pushes h by (`b - h`) |
 | `u_pinv` | `(S J)^+ (e_y - p)` | what a *perfect local inverse* would give (min-norm change of h that moves p to e_y to first order) |
-| `u_gn` | `(J^T S J)^+ J^T (e_y - p)` | the Gauss-Newton step of the cross-entropy loss in h |
+| `u_gn` | `(J^T S J)^+ J^T (e_y - p)` | the Gauss-Newton step of the cross-entropy loss in h; **the same vector as `u_pinv`** (see below) |
+| `u_lsq` | `J^T (J J^T + alpha I)^-1 (e_y - p)`, `alpha_i = 0.01 x` mean eigenvalue of `J_i J_i^T` | the damped least-squares inverse in logit space (treats `e_y - p` as the logit change); the genuinely different alternative |
 
-`u_pinv` and `u_gn` are different objects (they weight the output space differently); report both. The Jacobian has a closed form for this model, `J = W2 diag(act'(a2)) W1 diag(act'(h))` with `a2 = W1 act(h) + b1`; check it against `torch.func.jacrev` in a test.
+`u_pinv` and `u_gn` are the **same vector** whenever `J` has full row rank (generic here, 128 -> 10): both are the minimum-norm solution in the row space of `J` of `S J J^T w = e_y - p` (checked numerically and by a test; an earlier version of this note wrongly called them different objects). The code therefore computes `u_pinv` (the curvature direction, called `pinv` in the results) and `u_lsq`. The Jacobian has a closed form for this model, `J = W2 diag(act'(a2)) W1 diag(act'(h))` with `a2 = W1 act(h) + b1`; check it against `torch.func.jacrev` in a test.
 
 ## What the check measures
 
 Train arm D (`configs/tuned/t1_meet_two.yaml`, tanh, 3,000 steps) on 3 new seeds (600, 601, 602). At steps 100, 200, 500, 1000, 1500, 2000 and 3000, take 16 fixed batches of 128 **training** examples (the E-009 protocol) and compute:
 
-**Part 1, in h-space (per example, then averaged).** Cosines of the pairs (`u_meet`, `u_bp`), (`u_meet`, `u_pinv`), (`u_meet`, `u_gn`), (`u_bp`, `u_pinv`), (`u_bp`, `u_gn`), (`u_pinv`, `u_gn`), and the norm ratio `||u_meet|| / ||u_bp||`. The primary mean is **weighted by `||u_bp||`** (examples that matter for the update); the unweighted mean is also reported. Examples with `p_y > 0.9999` are skipped (their loss is numerically zero and the pseudo-inverse is unstable); report the share skipped at each step.
+**Part 1, in h-space (per example, then averaged).** Cosines of the pairs (`u_meet`, `u_bp`), (`u_meet`, `u_pinv`), (`u_meet`, `u_lsq`), (`u_bp`, `u_pinv`), (`u_bp`, `u_lsq`), (`u_pinv`, `u_lsq`), and the norm ratio `||u_meet|| / ||u_bp||`. The primary mean is **weighted by `||u_bp||`** (examples that matter for the update); the unweighted mean is also reported. Examples with `p_y > 0.9999` are skipped (their loss is numerically zero and the pseudo-inverse is unstable); report the share skipped at each step.
 
 **Part 2, in parameter space (lower layers `F_low`, as the H3 diagnostic).** On each batch: `g_task`, `g_meet` (the unscaled meeting-loss gradient), then
 - `cos(g_task, g_meet)` and the parallel share `cos^2`,
@@ -40,14 +41,14 @@ Measuring never changes the training run (separate random generator; tested, as 
 The thresholds are judgment calls fixed now, before any data.
 
 - **Q1, redundancy of the signal in parameter space.** **REDUNDANT** if `cos(g_task, g_meet) >= 0.6` at all three steps **and** `|dL(-g_perp)| <= 0.1 * |dL(-g_task)|` at all three steps. **NOT REDUNDANT** if the second condition fails (the orthogonal part changes the loss by more than 10% of what the task direction does) at two of the three steps. Otherwise **INCONCLUSIVE**.
-- **Q2, does G approximate a curvature direction?** **YES** if `cos(u_meet, u_gn) >= cos(u_meet, u_bp) + 0.10` at steps 500 and 1000. **NO** if it is below `cos(u_meet, u_bp)` at both. Otherwise **UNCLEAR**. Do the same with `u_pinv`.
-- **Q3, does curvature matter at all for this network?** **BACKPROP ~ GN** if `cos(u_bp, u_gn) >= 0.9` at all three steps (then a curvature explanation is dead and B's GN arm should be expected to equal its control). **GN DIFFERS** if `cos(u_bp, u_gn) <= 0.8` at all three steps. Otherwise **GREY**.
+- **Q2, does G approximate a curvature direction?** **YES** if `cos(u_meet, u_pinv) >= cos(u_meet, u_bp) + 0.10` at steps 500 and 1000. **NO** if it is below `cos(u_meet, u_bp)` at both. Otherwise **UNCLEAR**. Report the same with `u_lsq` (descriptive).
+- **Q3, does curvature matter at all for this network?** **BACKPROP ~ GN** if `cos(u_bp, u_pinv) >= 0.9` at all three steps (then a curvature explanation is dead and B's pinv oracle `P` should be expected to behave like its control `F'`). **GN DIFFERS** if `cos(u_bp, u_pinv) <= 0.8` at all three steps. Otherwise **GREY**.
 
 ## What each outcome leads to
 
 - **Q1 REDUNDANT:** the redundancy explanation is supported (still an interpretation until B). Write it into FINDINGS as `exploratory`.
-- **Q1 NOT REDUNDANT:** the orthogonal part carries something. Look at what (is it correlated with `u_pinv` or `u_gn`?) before concluding, and treat B as more promising.
-- **Q3 BACKPROP ~ GN:** drop the GN arm of B (keep the pinv arm and the scaled-gradient control).
+- **Q1 NOT REDUNDANT:** the orthogonal part carries something. Look at what (is it correlated with `u_pinv` or `u_lsq`?) before concluding, and treat B as more promising.
+- **Q3 BACKPROP ~ GN:** expect B's pinv oracle `P` (which is the Gauss-Newton direction) to behave like the scaled-gradient control `F'`; run `F'` and `Q` first and `P` only as a check.
 - **Q3 GN DIFFERS and Q2 YES:** B's oracle arms are well motivated; run them as planned.
 - Any mixed outcome: report it as is. Do not tune the thresholds.
 
@@ -77,6 +78,6 @@ Writes `results/processed/mechanism_a_ma1.csv` (one row per seed, step, quantity
 
 1. The closed-form Jacobian equals `torch.func.jacrev` of `model.up` (relu and tanh).
 2. `u_bp` equals minus the autograd gradient of the per-example cross-entropy with respect to `h`.
-3. For a linear top half (identity activation) `J` is constant; check `u_gn` and `u_pinv` against a direct SVD computation.
+3. For a linear top half (identity activation) `J` is constant; check that `u_pinv` solves `S J u = e_y - p`, that the Gauss-Newton step equals `u_pinv`, and that `u_lsq` equals the damped form `(J^T J + alpha I)^-1 J^T (e_y - p)` (all in `tests/test_mechanism.py`).
 4. `g_perp` is orthogonal to `g_task` to numerical precision, and `g_par + g_perp = g_meet`.
 5. Measuring does not change the training log (same run with and without checkpoints).

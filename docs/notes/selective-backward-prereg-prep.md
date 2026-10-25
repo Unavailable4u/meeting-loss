@@ -61,7 +61,7 @@ Include it in `prereg-v2` **only if** check L (`linking-measurement-concentratio
 ## Decisions needed before `prereg-v2` (recommended defaults, yours to choose)
 
 1. **S's hyperparameters:** inherit A's tuned values as the **primary** (conservative: A was tuned, S was not; the claim reads "bolting selective backward onto a tuned recipe saves compute"). Tuning S with the same budget is a descriptive secondary only.
-2. **Baselines:** A1 (`t1_base_two`), A2 (`t2_base_two`), a **fresh independent tuning of A** (new tag, for example `t5`; `t3` and `t4` are reserved by checks C and D), and the best small-batch arm from Look 2. The noise-floor rule of D-019 applies.
+2. **Baselines:** A1 (`t1_base_two`), A2 (`t2_base_two`), **further independent tunings of A** (tags `t5` to `t8`, proposed in D-022, which makes the number of tunings and the reference rule OPEN there; `t3` and `t4` are reserved by checks C and D), and the best small-batch arm from Look 2. The noise-floor rule of D-019 applies.
 3. **Seeds and rule:** about 20 seeds (block 1300 to 1319), a 15% margin, the three-way outcome (supported / refuted / inconclusive) as in D-019, R30 reported and never deciding. The expected effect (about -39%) is far from the 15% margin, so power is not the issue; use the effort on the baselines and the second setting.
 4. **Second setting:** an MLP on Fashion-MNIST or flattened CIFAR-10 (the hand-written backward probably carries over; check the input dimension handling). It needs **its own tuned baseline** (a 25-trial, 2-seed tuning of A in that setting, same rules). A CNN needs a new backward pass and can come later.
 5. **Wall-clock** as a pre-registered secondary outcome (Look 1's protocol).
