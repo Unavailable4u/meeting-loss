@@ -1,0 +1,90 @@
+tuning: 48 runs (3 batch sizes x 8 trials x 2 seeds)
+[1/48] done    sb1-tune-b32-t00_s1200
+[2/48] done    sb1-tune-b32-t01_s1201
+[3/48] done    sb1-tune-b32-t00_s1201
+[4/48] done    sb1-tune-b32-t01_s1200
+[5/48] done    sb1-tune-b32-t02_s1200
+[6/48] done    sb1-tune-b32-t02_s1201
+[7/48] done    sb1-tune-b32-t03_s1200
+[8/48] done    sb1-tune-b32-t03_s1201
+[9/48] done    sb1-tune-b32-t04_s1200
+[10/48] done    sb1-tune-b32-t04_s1201
+[11/48] done    sb1-tune-b32-t05_s1200
+[12/48] done    sb1-tune-b32-t05_s1201
+[13/48] done    sb1-tune-b32-t06_s1200
+[14/48] done    sb1-tune-b32-t06_s1201
+[15/48] done    sb1-tune-b32-t07_s1200
+[16/48] done    sb1-tune-b32-t07_s1201
+[17/48] done    sb1-tune-b48-t00_s1200
+[18/48] done    sb1-tune-b48-t00_s1201
+[19/48] done    sb1-tune-b48-t01_s1201
+[20/48] done    sb1-tune-b48-t01_s1200
+[21/48] done    sb1-tune-b48-t02_s1200
+[22/48] done    sb1-tune-b48-t02_s1201
+[23/48] done    sb1-tune-b48-t03_s1200
+[24/48] done    sb1-tune-b48-t03_s1201
+[25/48] done    sb1-tune-b48-t04_s1200
+[26/48] done    sb1-tune-b48-t04_s1201
+[27/48] done    sb1-tune-b48-t05_s1200
+[28/48] done    sb1-tune-b48-t05_s1201
+[29/48] done    sb1-tune-b48-t06_s1200
+[30/48] done    sb1-tune-b48-t06_s1201
+[31/48] done    sb1-tune-b48-t07_s1200
+[32/48] done    sb1-tune-b48-t07_s1201
+[33/48] done    sb1-tune-b64-t00_s1200
+[34/48] done    sb1-tune-b64-t00_s1201
+[35/48] done    sb1-tune-b64-t01_s1200
+[36/48] done    sb1-tune-b64-t01_s1201
+[37/48] done    sb1-tune-b64-t02_s1200
+[38/48] done    sb1-tune-b64-t02_s1201
+[39/48] done    sb1-tune-b64-t03_s1200
+[40/48] done    sb1-tune-b64-t03_s1201
+[41/48] done    sb1-tune-b64-t04_s1200
+[42/48] done    sb1-tune-b64-t04_s1201
+[43/48] done    sb1-tune-b64-t05_s1200
+[44/48] done    sb1-tune-b64-t05_s1201
+[45/48] done    sb1-tune-b64-t06_s1200
+[46/48] done    sb1-tune-b64-t06_s1201
+[47/48] done    sb1-tune-b64-t07_s1200
+[48/48] done    sb1-tune-b64-t07_s1201
+best b32: trial 7 lr 0.000994609
+best b48: trial 0 lr 0.00111004
+best b64: trial 4 lr 0.0026436
+[1/15] done    sb1-eval-S30_s1202
+[2/15] done    sb1-eval-A_s1203
+[3/15] done    sb1-eval-A_s1204
+[4/15] done    sb1-eval-A_s1202
+[5/15] done    sb1-eval-S30_s1204
+[6/15] done    sb1-eval-S30_s1203
+[7/15] done    sb1-eval-b32_s1202
+[8/15] done    sb1-eval-b32_s1203
+[9/15] done    sb1-eval-b48_s1202
+[10/15] done    sb1-eval-b32_s1204
+[11/15] done    sb1-eval-b48_s1203
+[12/15] done    sb1-eval-b48_s1204
+[13/15] done    sb1-eval-b64_s1202
+[14/15] done    sb1-eval-b64_s1203
+[15/15] done    sb1-eval-b64_s1204
+
+=== Look 2: FLOPs-to-target against arm A at batch 128 (ratio < 1 means cheaper); rule: two consecutive evaluations ===
+  best trial b32: trial 7  lr 0.000994609  tuning score 127.9 GFLOPs (2/2 seeds reached 0.97)
+  best trial b48: trial 0  lr 0.00111004  tuning score 123.7 GFLOPs (2/2 seeds reached 0.97)
+  best trial b64: trial 4  lr 0.0026436  tuning score 147.3 GFLOPs (2/2 seeds reached 0.97)
+variant  target | GFLOPs  ratio | steps ratio | missed seeds
+A        0.970  |  142.1   1.000 |   1.000     |  0/3
+A        0.975  |  235.2   1.000 |   1.000     |  0/3
+S30      0.970  |  110.6   0.778 |   1.200     |  0/3
+S30      0.975  |  153.4   0.652 |   1.022     |  0/3
+b32      0.970  |  147.3   1.036 |   4.145     |  0/3
+b32      0.975  |  204.2   0.868 |   3.473     |  0/3
+b48      0.970  |  126.3   0.889 |   2.370     |  0/3
+b48      0.975  |  216.5   0.921 |   2.455     |  0/3
+b64      0.970  |  175.7   1.236 |   2.473     |  0/3
+b64      0.975  |  245.5   1.044 |   2.088     |  0/3
+
+Best small-batch arm: b48.  S30 / best small batch: 0.97: 0.876, 0.975: 0.708  (S30 does NOT beat it by 15% at both targets)
+
+Pre-registered rule: BASELINE PROBLEM if the best small batch has ratio <= 0.85 at both targets; A WAS FINE if every small batch has ratio >= 1.0 at both; otherwise PARTIAL.
+VERDICT: PARTIAL
+
+wrote /home/unavailable4u/projects/meeting-loss/results/processed/batch_control_sb1.csv
