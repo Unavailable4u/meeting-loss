@@ -1,6 +1,6 @@
 # Plan
 
-**Last updated:** 2026-10-26 (check G0 built, DR-010, run pending; checks A and L done, E-012, F-013; D-020 accepted; Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
+**Last updated:** 2026-10-26 (check G0 done: DOSE HARMS, E-013, F-014; DR-010; checks A and L done, E-012, F-013; D-020 accepted; Step 0 regression check passed, E-011 attempt 2; D-022 and DR-009 proposed; selective-backward pilot E-010, F-012, DR-007, D-021 proposed; before that: Stage 3 final runs E-008; F-009 to F-011; D-019, DR-005, DR-006)
 **Project start (week 1):** 2026-10-21. Set real calendar dates for each stage below once you know your availability. Weeks are counted from the start date and are rough (part-time pace).
 **Current stage:** Stage 3 finished; the gate decision is open (see below)
 
@@ -12,7 +12,7 @@ Stage 3 is done (E-008, confirmatory). **H1 is refuted:** arm D needs about 36% 
 
 ## Next three actions
 
-1. **Check G0** (fixed-hyperparameter dose-response of the learned loss, `docs/notes/mechanism-dose-response.md`): **built and tested (2026-10-26, DR-010), not yet run.** Order: apply the patch, `pytest`, push; `python scripts/verify_regression.py` (real MNIST, must PASS; one thread per process); then `python scripts/run_dose_response.py --tag mr1 --workers 4 --threads 1` (50 runs, resumable, prints the verdict and writes `results/processed/dose_response_mr1.csv`). Afterwards: log an exploratory entry (next free E-ID), a finding, and update C-17. Then the three looks of track S (wall-clock, small batch, `sel_frac` curve; not while a sweep is running), then checks B and D (order of `mechanism-overview.md`).
+1. **Check G0 is done** (E-013, F-014): verdict DOSE HARMS at every dose tested (rho 0.1 to 3: +60% to +208% steps-to-target, with `h_var` blowing up); the grid skipped arm D's own effective dose (about 0.001). Open decision for the researcher: a low-dose extension (rho about 0.003 to 0.03, fresh seeds, plan and rule written first) or go on. Next in the order of `mechanism-overview.md`: the three looks of track S (wall-clock, small batch, `sel_frac` curve; not while a sweep is running), then checks B and D.
 2. **Decide D-022** (further tunings of arm A, t5 to t8; open items: number of tunings, the reference baseline of H7, whether B and S are tuned as often) and D-021's open items before `prereg-v2` is written.
 3. Keep the figures and the paper draft in line with the evidence: `make_figures.py` is still to be written; C-15 and C-16 now rest on E-012 (exploratory, status weak). Checks A and L ended Q1 NOT REDUNDANT (probe caveat), Q2 NO, Q3 GN DIFFERS, L ALREADY SELECTIVE, so the hybrid arm is not added to `prereg-v2`.
 
