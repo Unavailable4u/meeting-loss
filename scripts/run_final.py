@@ -4,7 +4,9 @@
   python scripts/run_final.py --workers 4             # all 150 runs (about 2.7 hours on 4 workers)
   python scripts/run_final.py --workers 4 --groups A D B A2
 
-Refuses to run unless the git tag prereg-v1 exists, is an ancestor of HEAD, and the locked files (plan,
+The plan may set its own lock tag, output directory and locked paths (prereg-v2: configs/prereg_v2_plan.yaml,
+--plan configs/prereg_v2_plan.yaml, tag prereg-v2, logs in results/raw/prereg_v2).
+Refuses to run unless the git tag of the plan (default prereg-v1) exists, is an ancestor of HEAD, and the locked files (plan,
 tuned configs, src/, HYPOTHESES.md, METHOD.md) are identical to the tag. A change to those files after the
 lock is post-hoc: record a drift entry, then use --allow-changed to run anyway (the tag must still exist).
 Raw logs go to results/raw/ as YYYYMMDD_<stage>_<arm>_s<seed>.jsonl; finished runs are skipped, never
@@ -19,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from anywhere
 
-from src.final import existing_run, load_plan, lock_status, plan_jobs, run_final_job
+from src.final import existing_run, load_plan, lock_status, plan_meta, plan_jobs, run_final_job
 
 
 def _init_worker(threads):
@@ -34,7 +36,7 @@ def main():
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--threads", type=int, default=1, help="torch threads per worker when --workers > 1")
     ap.add_argument("--device", default="auto")
-    ap.add_argument("--out-dir", default="results/raw")
+    ap.add_argument("--out-dir", default=None, help="default: the plan's out_dir (results/raw for the Stage 3 plan)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int, default=None, help="run at most this many of the remaining jobs")
     ap.add_argument("--allow-changed", action="store_true", help="skip the locked-files check (needs a drift entry)")
@@ -42,13 +44,20 @@ def main():
     ap.add_argument("--max-steps", type=int, default=None, help="only with --smoke")
     args = ap.parse_args()
 
+    meta = plan_meta(args.plan)
+    if args.out_dir is None:
+        args.out_dir = meta["out_dir"]
+        plan_out = True
+    else:
+        plan_out = pathlib.Path(args.out_dir).resolve() == pathlib.Path(meta["out_dir"]).resolve()
+    print(f"plan {args.plan}: lock tag {meta['lock_tag']}, output directory {args.out_dir}")
     if args.smoke:
-        if pathlib.Path(args.out_dir).resolve() == pathlib.Path("results/raw").resolve():
-            sys.exit("--smoke must write somewhere other than results/raw")
+        if plan_out:
+            sys.exit(f"--smoke must write somewhere other than {meta['out_dir']}")
     else:
         if args.max_steps is not None:
             sys.exit("--max-steps is only for --smoke")
-        ok, msg = lock_status()
+        ok, msg = lock_status(tag=meta["lock_tag"], paths=meta["locked_paths"])
         if not ok and args.dry_run:
             print(f"(lock check would fail now: {msg})")
             ok = True
@@ -58,13 +67,17 @@ def main():
         if not ok:
             sys.exit(f"LOCK CHECK FAILED: {msg}")
 
-    groups = load_plan(args.plan)
+    groups = load_plan(args.plan, allow_missing=args.dry_run)
     if args.groups:
         unknown = set(args.groups) - {g["name"] for g in groups}
         if unknown:
             sys.exit(f"unknown groups {sorted(unknown)}; plan has {[g['name'] for g in groups]}")
         groups = [g for g in groups if g["name"] in args.groups]
     jobs = plan_jobs(groups, args.out_dir)
+    pending = [g["name"] for g in groups if g["cfg"] is None]
+    if pending:
+        print(f"configs not written yet for groups {pending}: nothing can run until they exist (D-023)")
+        return
     stage_arm = {g["name"]: (g["cfg"]["stage"], g["cfg"]["arm"]) for g in groups}
     todo = [j for j in jobs if not existing_run(args.out_dir, *stage_arm[j.group], j.seed)]
     print(f"{len(groups)} groups, {len(jobs)} runs; {len(jobs) - len(todo)} already done, {len(todo)} to run")

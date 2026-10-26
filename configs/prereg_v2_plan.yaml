@@ -1,0 +1,29 @@
+# prereg-v2 plan (decision D-023, DR-011): the confirmatory test of the selective backward pass.
+# Read by scripts/run_final.py (--plan configs/prereg_v2_plan.yaml) and scripts/analyze_prereg2.py.
+# NOT LOCKED YET. The lock is the commit that adds the hypotheses H7a and H7b to docs/HYPOTHESES.md, fixes `shift_rule`
+# below, and carries the tag prereg-v2; before that commit the plan may change, after it a change is post-hoc and needs a
+# drift entry. Two configs do not exist yet because their tunings have not been run: B48 (tag t9, batch 48, 8,000 steps) and
+# S30T (tag t10, S tuned once); `scripts/run_final.py --dry-run` names them. Seeds 1300 to 1319 in every group (paired).
+# Roles: reference = A1 (H7a reference); primary = S30 (H7a, H7b); control = B48 (H7b reference); shift = the further tunings of
+# A whose paired change against A1 defines the re-tuning shift; secondary / descriptive = reported, never decide a claim.
+horizon_steps: 3000
+seed_block: "1300-1319"
+out_dir: results/raw/prereg_v2
+lock_tag: prereg-v2
+locked_paths: [configs/prereg_v2_plan.yaml, configs/prereg_v2, configs/tuned, src, docs/HYPOTHESES.md, docs/METHOD.md]
+# DECIDED 2026-10-27 (D-023 decision 2): max_gain = the largest improvement of any of A2, A5 to A8 over A1 (0 if none is better);
+# the researcher delegated the choice to the assistant after seeing the numbers in docs/notes/prereg-v2-plan.md. The alternatives
+# (max_abs, median_abs) are printed as descriptive by scripts/analyze_prereg2.py --shift-rule. Fixed at the lock.
+shift_rule: max_gain
+groups:
+  - {name: A1,  config: configs/tuned/t1_base_two.yaml,       seeds: "1300-1319", role: reference,   note: "arm A, t1 tuning: reference of H7a"}
+  - {name: S30, config: configs/prereg_v2/S30.yaml,           seeds: "1300-1319", role: primary,     note: "selective backward, sel_frac 0.3, A1's hyperparameters: H7a and H7b"}
+  - {name: B48, config: configs/tuned/t9_base_b48_two.yaml,   seeds: "1300-1319", role: control,     horizon_steps: 8000, note: "arm A at batch 48, fully tuned (t9), 8,000 steps: H7b reference"}
+  - {name: A2,  config: configs/tuned/t2_base_two.yaml,       seeds: "1300-1319", role: shift,       note: "arm A, second tuning"}
+  - {name: A5,  config: configs/tuned/t5_base_two.yaml,       seeds: "1300-1319", role: shift,       note: "arm A, tuning t5"}
+  - {name: A6,  config: configs/tuned/t6_base_two.yaml,       seeds: "1300-1319", role: shift,       note: "arm A, tuning t6"}
+  - {name: A7,  config: configs/tuned/t7_base_two.yaml,       seeds: "1300-1319", role: shift,       note: "arm A, tuning t7"}
+  - {name: A8,  config: configs/tuned/t8_base_two.yaml,       seeds: "1300-1319", role: shift,       note: "arm A, tuning t8"}
+  - {name: S20, config: configs/prereg_v2/S20.yaml,           seeds: "1300-1319", role: secondary,   note: "selective backward, sel_frac 0.2"}
+  - {name: S30T, config: configs/tuned/t10_selective30_two.yaml, seeds: "1300-1319", role: descriptive, note: "selective backward at 0.3, tuned once (t10)"}
+  - {name: R30, config: configs/prereg_v2/R30.yaml,           seeds: "1300-1319", role: descriptive, note: "random control: 30% of the rows at random"}

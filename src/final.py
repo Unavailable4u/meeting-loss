@@ -20,7 +20,7 @@ from src.sweep import REPO, _git_info, config_hash
 LOCK_TAG = "prereg-v1"
 LOCKED_PATHS = ["configs/stage3_plan.yaml", "configs/tuned", "src", "docs/HYPOTHESES.md", "docs/METHOD.md"]
 RESERVED_SEED_LIMIT = 100           # seeds below this are for final runs; selection seeds are 1000 and up
-ROLES = ("primary", "secondary", "gated", "descriptive")
+ROLES = ("primary", "secondary", "gated", "descriptive", "reference", "control", "shift")  # the last three: prereg-v2 (D-023)
 
 
 def parse_seeds(spec):
@@ -46,9 +46,24 @@ class FinalJob:
     out_dir: str
 
 
-def load_plan(path=REPO / "configs" / "stage3_plan.yaml", repo=REPO):
-    """Validated plan: a list of dicts with name, config (path), cfg (loaded), seeds, role, note."""
+def plan_meta(path=REPO / "configs" / "stage3_plan.yaml"):
+    """Plan-level settings with the Stage 3 defaults: the lock tag, the output directory, the lock paths, the seed
+    block ([first, last] or None for the reserved range 0 to 99) and the shift rule of prereg-v2."""
     doc = yaml.safe_load(open(path))
+    block = doc.get("seed_block")
+    return dict(lock_tag=doc.get("lock_tag", LOCK_TAG), out_dir=doc.get("out_dir", "results/raw"),
+                locked_paths=doc.get("locked_paths", LOCKED_PATHS),
+                seed_block=None if block is None else [parse_seeds(block)[0], parse_seeds(block)[-1]],
+                shift_rule=doc.get("shift_rule"), horizon_steps=doc["horizon_steps"])
+
+
+def load_plan(path=REPO / "configs" / "stage3_plan.yaml", repo=REPO, allow_missing=False):
+    """Validated plan: a list of dicts with name, config (path), cfg (loaded), seeds, role, horizon, note.
+    Optional plan keys: seed_block ("1300-1319": the seeds of every group must lie in it; without it they must be below
+    RESERVED_SEED_LIMIT) and, per group, horizon_steps (default: the plan's). With allow_missing a config file that
+    does not exist yet gives cfg = None (the plan can be written before the tunings it names are finished)."""
+    doc = yaml.safe_load(open(path))
+    meta = plan_meta(path)
     groups = []
     names, ids = set(), set()
     for g in doc["groups"]:
@@ -58,17 +73,27 @@ def load_plan(path=REPO / "configs" / "stage3_plan.yaml", repo=REPO):
         if g["role"] not in ROLES:
             raise ValueError(f"group {g['name']}: role must be one of {ROLES}")
         cfg_path = pathlib.Path(repo) / g["config"]
-        cfg = yaml.safe_load(open(cfg_path))
-        key = (cfg["stage"], cfg["arm"])
-        if key in ids:
-            raise ValueError(f"groups share the same (stage, arm) {key}; their run files would collide")
-        ids.add(key)
+        if not cfg_path.exists() and allow_missing:
+            cfg = None
+        else:
+            cfg = yaml.safe_load(open(cfg_path))
         seeds = parse_seeds(g["seeds"])
-        if min(seeds) < 0 or max(seeds) >= RESERVED_SEED_LIMIT:
+        if meta["seed_block"] is not None:
+            lo, hi = meta["seed_block"]
+            if min(seeds) < lo or max(seeds) > hi:
+                raise ValueError(f"group {g['name']}: seeds must be in the plan's block [{lo}, {hi}]")
+        elif min(seeds) < 0 or max(seeds) >= RESERVED_SEED_LIMIT:
             raise ValueError(f"group {g['name']}: final seeds must be in [0, {RESERVED_SEED_LIMIT})")
-        if cfg["max_steps"] != doc["horizon_steps"]:
-            raise ValueError(f"group {g['name']}: max_steps {cfg['max_steps']} != plan horizon {doc['horizon_steps']}")
-        groups.append(dict(name=g["name"], config=g["config"], cfg=cfg, seeds=seeds, role=g["role"], note=g.get("note", "")))
+        horizon = g.get("horizon_steps", doc["horizon_steps"])
+        if cfg is not None:
+            key = (cfg["stage"], cfg["arm"])
+            if key in ids:
+                raise ValueError(f"groups share the same (stage, arm) {key}; their run files would collide")
+            ids.add(key)
+            if cfg["max_steps"] != horizon:
+                raise ValueError(f"group {g['name']}: max_steps {cfg['max_steps']} != plan horizon {horizon}")
+        groups.append(dict(name=g["name"], config=g["config"], cfg=cfg, seeds=seeds, role=g["role"], horizon=horizon,
+                           note=g.get("note", "")))
     return groups
 
 

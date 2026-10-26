@@ -40,3 +40,9 @@ Still to write:
 - `make_figures.py`: regenerate every figure in `paper/FIGURES.md` from `results/raw/`
 
 Figures and tables are always regenerated from raw results, never edited by hand.
+
+prereg-v2 (D-023, DR-011; plan and order in `docs/notes/prereg-v2-plan.md`):
+- `run_sweep.py --tag t9 --arms base_b48 --seeds 9000 9001` (batch 48, 8,000 steps) and `--tag t10 --arms selective30 --seeds 9100 9101` (tuned S): the protocol horizon is chosen per arm; other settings need a `smoke` tag.
+- `run_final.py --plan configs/prereg_v2_plan.yaml`: lock tag, output directory (`results/raw/prereg_v2`) and locked paths come from the plan; `--dry-run` names configs that do not exist yet.
+- `make_prereg2_configs.py`: writes `configs/prereg_v2/{S30,S20,R30}.yaml` (A1 plus the selective keys).
+- `analyze_prereg2.py`: the pre-registered analysis (H7a, H7b, re-tuning shift, noise floor, descriptive groups) from the plan; refuses incomplete groups; `--shift-rule` shows another rule descriptively.
