@@ -1,0 +1,27 @@
+# Selected by D-017/D-018 from sweep 't9', arm 'base_b48', crossing rule 'two'.
+# trial t11, score 207148032000 FLOPs (two crossing), reached 2/2 seeds, sweep max_steps 8000
+# Run final seeds with: python -m src.train --config <this file> --seed N
+stage: final-t9-base_b48-two
+arm: base
+seed: 0
+act: relu
+lr: 0.000610489
+wd: 4.54983e-06
+batch_size: 48
+max_steps: 8000
+eval_every: 125
+device: auto
+lr_schedule: cosine
+low_lr_mult: 1.0
+lam_meet: 0.1
+lam_inv: 1.0
+warmup_steps: 500
+sigma_inv: 0.0
+eta_hat: 0.1
+sel_frac: 0.3
+sel_warmup: 100
+sel_mode: top
+lam_aux: 0.3
+aux_sched: const
+aux_gamma: 0.0
+aux_lr_decay: none
