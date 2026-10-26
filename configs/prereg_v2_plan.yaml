@@ -1,9 +1,9 @@
 # prereg-v2 plan (decision D-023, DR-011): the confirmatory test of the selective backward pass.
 # Read by scripts/run_final.py (--plan configs/prereg_v2_plan.yaml) and scripts/analyze_prereg2.py.
-# NOT LOCKED YET. The lock is the commit that adds the hypotheses H7a and H7b to docs/HYPOTHESES.md, fixes `shift_rule`
-# below, and carries the tag prereg-v2; before that commit the plan may change, after it a change is post-hoc and needs a
-# drift entry. Two configs do not exist yet because their tunings have not been run: B48 (tag t9, batch 48, 8,000 steps) and
-# S30T (tag t10, S tuned once); `scripts/run_final.py --dry-run` names them. Seeds 1300 to 1319 in every group (paired).
+# LOCKED by the tag prereg-v2 (2026-10-27): the lock commit adds the hypotheses H7a and H7b to docs/HYPOTHESES.md, fixes
+# `shift_rule` (max_gain) and carries this tag. After it a change to the plan, configs/prereg_v2, configs/tuned, src,
+# docs/HYPOTHESES.md or docs/METHOD.md is post-hoc and needs a drift entry (run_final.py checks this against the tag).
+# The configs of B48 (tag t9, E-020) and S30T (tag t10, E-021) exist. Seeds 1300 to 1319 in every group (paired).
 # Roles: reference = A1 (H7a reference); primary = S30 (H7a, H7b); control = B48 (H7b reference); shift = the further tunings of
 # A whose paired change against A1 defines the re-tuning shift; secondary / descriptive = reported, never decide a claim.
 horizon_steps: 3000

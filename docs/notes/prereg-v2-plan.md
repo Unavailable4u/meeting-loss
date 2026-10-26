@@ -33,7 +33,7 @@ See `selective-backward-prereg-prep.md`, dated note of 2026-10-26: **H7a** (S30 
 - **The reference set for the noise floor** is A1 plus the shift groups (A2, A5 to A8): the ratio max / min of their mean FLOPs-to-target at each target gives LARGE (at least 1.15 at both), SMALL (at most 1.10 at both) or MIXED, as in D-022. It is descriptive and decides no claim.
 - **Descriptive comparisons** against A1 and against the best tuning of A on the same seeds (picked on the same seeds, so optimistic for the baseline) are reported for every group, including S20, the tuned S (S30T) and the random control R30.
 - **Files:** the final logs of B48 and S30T are found by their stage and arm names (`final-t9-base_b48-two` / `base`, `final-t10-selective30-two` / `selective`); no group's files can collide with Stage 3 logs because the output directory is separate.
-- **Regression:** `src/sweep.py` and `src/final.py` changed and `src/prereg2.py` is new; `src/model.py`, `src/train.py`, `src/selective.py`, the FLOP counter and every Stage 3 arm are untouched. A rerun of `scripts/verify_regression.py` on real MNIST is still the researcher's check after the patch (as in E-011).
+- **Regression:** `src/sweep.py` and `src/final.py` changed and `src/prereg2.py` is new; `src/model.py`, `src/train.py`, `src/selective.py`, the FLOP counter and every Stage 3 arm are untouched. A rerun of `scripts/verify_regression.py` on real MNIST is still the researcher's check after the patch (as in E-011). **Done 2026-10-27: E-011 attempt 4, PASS (bit-identical), on the same `src/` that is locked.**
 
 ## DECIDED (2026-10-27): the re-tuning shift rule is `max_gain`
 
