@@ -13,8 +13,9 @@ Examples (run from the repo root):
   # quick pipeline check (non-protocol settings need a tag that starts with "smoke")
   python scripts/run_sweep.py --tag smoke1 --arms base meet --trials 2 --max-steps 100 --seeds 100 101
 
-Protocol (D-014, D-017): 25 trials per arm, 2 selection seeds per trial, 3,000 steps per run, search
-spaces in src/sweep.py. Every arm must get the same number of trials; the same tag with the same
+Protocol (D-014, D-017): 25 trials per arm, 2 selection seeds per trial, 3,000 steps per run (8,000 for the
+batch-48 arm base_b48, equal samples; D-023), search spaces in src/sweep.py. prereg-v2 tunings: t9 = base_b48 on
+seeds 9000 9001, t10 = selective30 on seeds 9100 9101. Every arm must get the same number of trials; the same tag with the same
 arms resumes where it stopped (finished runs are skipped, never overwritten). Raw logs go to
 results/raw/sweeps/<tag>/; pick the winners with scripts/analyze.py select.
 """
@@ -27,8 +28,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # run from anywhere
 
-from src.sweep import (DEFAULT_SEEDS, MAIN_ARMS, N_TRIALS, SWEEP_ARMS, SWEEP_ROOT, SWEEP_STEPS,
-                       check_protocol, check_tag, plan_jobs, run_job, write_manifest)
+from src.sweep import (DEFAULT_SEEDS, MAIN_ARMS, N_TRIALS, SWEEP_ARMS, SWEEP_ROOT,
+                       check_protocol, check_tag, expected_steps, plan_jobs, run_job, write_manifest)
 
 
 def _init_worker(threads):
@@ -44,7 +45,8 @@ def main():
     ap.add_argument("--seeds", nargs="+", type=int, default=list(DEFAULT_SEEDS),
                     help="selection seeds (>= 100). Use different seeds for the re-tuning pass")
     ap.add_argument("--trials", type=int, default=N_TRIALS)
-    ap.add_argument("--max-steps", type=int, default=SWEEP_STEPS)
+    ap.add_argument("--max-steps", type=int, default=None,
+                    help="default: the protocol horizon of the arms (3,000 steps; 8,000 for base_b48, D-023)")
     ap.add_argument("--workers", type=int, default=1, help="parallel processes (1 = run inline)")
     ap.add_argument("--threads", type=int, default=1, help="torch threads per worker when --workers > 1")
     ap.add_argument("--device", default="auto")
@@ -55,7 +57,9 @@ def main():
 
     arms = list(dict.fromkeys(x for a in args.arms for x in (MAIN_ARMS if a == "main" else (a,))))
     check_tag(args.tag)
-    off = check_protocol(args.tag, args.trials, args.max_steps, args.seeds)
+    if args.max_steps is None:
+        args.max_steps = expected_steps(arms)
+    off = check_protocol(args.tag, args.trials, args.max_steps, args.seeds, arms)
     if off:
         print("NON-PROTOCOL RUN (smoke tag): results must not be used for selection.")
 

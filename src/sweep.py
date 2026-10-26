@@ -75,6 +75,23 @@ SWEEP_ARMS = {
 }
 MAIN_ARMS = ("base", "deepsup", "ae", "meet", "base_lowlr", "meet_grad")   # A to F
 
+# prereg-v2 (D-023, DR-011). t9: arm A at batch 48 with the horizon of equal samples (3,000 x 128 / 48 = 8,000 steps) and
+# evaluations every 125 steps (6,000 samples; arm A evaluates every 6,400; 125 divides 8,000 so that the last evaluation is at the last
+# step, which the completeness check of collect_sweep needs: the 133 steps of the small-batch look E-017 would stop at 7,980); the same
+# search space as arm A.
+# t10: the selective backward pass at sel_frac 0.3 (E-010's S30), the same search space, tuned once as a secondary arm.
+SWEEP_ARMS["base_b48"] = ("base", {"batch_size": 48, "eval_every": 125}, {})
+SWEEP_ARMS["selective30"] = ("selective", {"sel_frac": 0.3, "sel_warmup": 100, "sel_mode": "top"}, {})
+ARM_STEPS = {"base_b48": 8000}  # protocol horizon per sweep arm; every other arm uses SWEEP_STEPS
+
+
+def expected_steps(arms):
+    """Protocol horizon of a sweep over `arms`. Arms with different horizons need separate tags."""
+    steps = {ARM_STEPS.get(a, SWEEP_STEPS) for a in arms}
+    if len(steps) != 1:
+        raise ValueError(f"arms {list(arms)} have different horizons {sorted(steps)}; use separate tags")
+    return steps.pop()
+
 
 # --- sampling --------------------------------------------------------------------------------
 def _rng(tag, arm):
@@ -135,16 +152,17 @@ def check_tag(tag):
         raise ValueError("tag must be letters, digits and hyphens only (it becomes part of file names)")
 
 
-def check_protocol(tag, n_trials, max_steps, seeds):
+def check_protocol(tag, n_trials, max_steps, seeds, arms=None):
     """Non-protocol sweeps (wrong trial count, horizon or seed count) must be labelled `smoke...`
     so that they cannot be mistaken for the equal-budget tuning runs (D-014, D-017)."""
     if any(s < MIN_SELECTION_SEED for s in seeds):
         raise ValueError(f"selection seeds must be >= {MIN_SELECTION_SEED} (0-99 are reserved for "
                          f"final runs and earlier experiments, so selection and final seeds stay disjoint)")
-    off = (n_trials != N_TRIALS or max_steps != SWEEP_STEPS or len(seeds) != N_SELECTION_SEEDS)
+    horizon = expected_steps(arms) if arms else SWEEP_STEPS
+    off = (n_trials != N_TRIALS or max_steps != horizon or len(seeds) != N_SELECTION_SEEDS)
     if off and not tag.startswith("smoke"):
         raise ValueError(f"non-protocol settings (trials={n_trials}, max_steps={max_steps}, "
-                         f"seeds={list(seeds)}); protocol is {N_TRIALS} trials, {SWEEP_STEPS} steps, "
+                         f"seeds={list(seeds)}); protocol is {N_TRIALS} trials, {horizon} steps, "
                          f"{N_SELECTION_SEEDS} seeds. Start the tag with 'smoke' to run it anyway.")
     return off
 
@@ -379,6 +397,22 @@ def margin_verdict(point, lo, hi, margin=15.0, shift=None):
     if lo > -margin:
         return "refuted"
     return "inconclusive"
+
+
+def shift_value(changes, rule):
+    """Re-tuning shift of the reference (D-019 point 3, extended in D-023) from the paired percentage changes of the
+    further tunings of the reference against the reference. A "supported" verdict needs the gain to exceed it.
+      max_abs     the largest absolute change (a worse tuning counts as much as a better one; D-019's form)
+      max_gain    the largest improvement of any further tuning over the reference (0 if none is better)
+      median_abs  the median absolute change"""
+    changes = [float(c) for c in changes]
+    if rule == "max_abs":
+        return max(abs(c) for c in changes)
+    if rule == "max_gain":
+        return max(0.0, max(-c for c in changes))
+    if rule == "median_abs":
+        return float(np.median([abs(c) for c in changes]))
+    raise ValueError(f"unknown shift rule {rule!r}; choose max_abs, max_gain or median_abs")
 
 
 def overall_verdict(verdicts):
