@@ -113,3 +113,18 @@ The target `b = sg(h) + G(e_y) - G(sg(p))` is the simplified difference target p
 - **Adam and control F.** Under AdamW, adding a term whose gradient on the lower layers is parallel to the task gradient mostly rescales that gradient, which Adam normalizes away. So F is nearly a no-op under AdamW and informative under SGD with momentum; control E (learning-rate multiplier) is the one that changes Adam's effective step.
 - **Alignment (H3).** Expect positive but imperfect alignment: Lee et al. bound the angle only under perfect inverses and small steps, and Meulemans et al. 2020 argue DTP targets follow Gauss-Newton-like directions rather than the gradient.
 - **Parked idea.** Bartunov et al. (appendix 5.6) suggest hybrid targets that mix the Jacobian-transpose target with a learned-inverse target. With backprop kept, an exact-gradient component only rescales the gradient (see arm F), so a hybrid is parked until there is a reason to test it.
+
+## v1.2 additions (2026-10-27; D-021, D-023, DR-007, DR-011): arm S and the groups of `prereg-v2`
+
+### Arm S: selective backward pass (`src/selective.py`)
+
+For each batch of B rows the forward pass runs on all rows and the per-row task loss is computed. The backward pass is written by hand and runs only through the k = ceil(`sel_frac` * B) rows with the highest loss (`sel_mode` top; random rows in the control R30). The gradient is the sum over the kept rows divided by B, so the update equals the full-batch gradient without the part of the omitted rows; it reproduces autograd's gradient on the kept rows (`tests/test_selective.py`). During the first `sel_warmup` steps (100) the full backward pass is used. Only plain MLPs are supported (no dropout, no batch normalisation); the optimizer and its settings are those of arm A. The rationale is the concentration of the gradient on high-loss rows (E-009, F-013).
+
+### FLOP counting
+
+As for every arm, `src/flops.py` counts the matrix multiplications of the forward and backward passes. For arm S a step costs the full-batch forward pass plus the backward pass of the k kept rows (full backward during warm-up); the cumulative count is logged at every evaluation. The top-k selection, the gather of rows and the optimizer are not counted, so wall-clock time is reported separately (F-016).
+
+### Groups of `prereg-v2` and the small-batch arm
+
+The plan is `configs/prereg_v2_plan.yaml` (11 groups, 220 runs, seeds 1300 to 1319); the hypotheses H7a and H7b and the roles of the groups are in `docs/HYPOTHESES.md`. The small-batch arm B48 is arm A at batch size 48, tuned in tag `t9` with A's search space and the same 25 trials, 8,000 steps (equal samples to 3,000 steps at batch 128), evaluated every 125 steps. A target is reached at the first of two consecutive evaluations at or above it for every group (D-018); intervals are 97.5% paired bootstrap intervals (10,000 resamples, seed 0).
+
