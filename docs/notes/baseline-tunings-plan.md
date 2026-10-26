@@ -63,3 +63,7 @@ git add -A && git commit -m "Tuning t5 of arm A (D-022)" && git push
 - Anything confirmatory by itself: it produces candidates and a plan, the measured spread comes with the `prereg-v2` finals.
 - The spread of the other arms: D, B, S and the controls were each tuned once. A comparison of one tuning of an arm against six of A is asymmetric (it favours the arm tuned more often), so any claim about B or S against A states how many tunings each had. Tuning B or S the same number of times is OPEN in D-022 and not proposed.
 - Anything beyond arm A on the MNIST MLP with AdamW and 3,000 steps.
+
+## Dated note (2026-10-26): D-022 accepted with D-023
+
+D-022 is accepted with **K = 4** (tags `t5` to `t8`) and the commands above can be run now (no new code; arm `base` only). The reference rule is no longer a single best-of-all comparison: D-023 uses the two-tier design (H7a against A1 with the shift rule from A2, t5 to t8; H7b against the fully tuned batch-48 arm), and the best of the six tunings and the median are reported next to H7a. The noise-floor outcome (LARGE / SMALL / MIXED) above is computed on the `prereg-v2` seeds 1300 to 1319. Option (a) of the table above (best of the six as the deciding comparison) was not chosen; option (c) (A1 only) is the primary comparison but with the shift rule that R-21 asked for. Not run while a timing look is being measured, and one tag at a time with `--threads 1`.

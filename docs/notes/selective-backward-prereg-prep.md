@@ -111,3 +111,15 @@ python scripts/pilot_selective.py --tag sf1 --sel-fracs 0.1 0.2 0.3 0.5 --seeds 
 ```
 
 The scripts exist (`scripts/time_selective.py`, `scripts/run_batch_control.py`, `scripts/pilot_selective.py --sel-fracs`; logic in `exploratory/looks.py`, tests in `tests/test_looks.py` and `tests/test_time_selective.py`). Log each look as an `exploratory` entry in `EXPERIMENT_LOG.md`.
+
+## Dated note (2026-10-26): decisions taken after the looks (D-023) and revised draft hypotheses
+
+The researcher accepted the design in D-023 after the three looks (E-016 to E-018). This section **supersedes the "Draft hypothesis" section above** (kept as written). `docs/HYPOTHESES.md` is locked by `prereg-v1` and is not edited until the `prereg-v2` lock commit.
+
+> **H7a (draft, primary).** In the MNIST MLP setting of D-008, the selective backward arm S at `sel_frac` 0.3 (top-loss rows, `sel_warmup` 100), inheriting the hyperparameters of the tuned baseline A1, reaches validation accuracy 0.97 and 0.975 with at least 15% fewer FLOPs (counted as in `src/flops.py`) than A1, on 20 paired seeds (1300 to 1319). Supported / refuted / inconclusive by the rule of D-019 (97.5% paired-bootstrap interval, margin 15%, both targets must agree), with the added condition that a supported verdict requires the gain to exceed the re-tuning shift of A (the largest absolute paired change of A2, t5 to t8 against A1 at that target; DEFAULT, to be fixed in the plan note).
+>
+> **H7b (draft, control).** On the same seeds, S at `sel_frac` 0.3 needs fewer FLOPs than the fully tuned batch-48 arm (tag `t9`, 8,000 steps) at both targets. Margin 0%: supported if the 97.5% interval lies below 0 at both targets, refuted if its lower end is at or above 0 at both, inconclusive otherwise.
+
+Descriptive on the same seeds, deciding no claim: A2 and the four further tunings of A, S at `sel_frac` 0.2, S tuned once (`t10`), the random control R30, wall-clock per step (one and eight threads) and a derived time to target. Reasons for each choice: D-023.
+
+What the looks gave and what they do not give: S30's saving against A1 was 22% to 38% on three seed groups; against the best small batch it was 12% (0.97) and 29% (0.975) on 3 seeds with a lighter tuning; time per step saves 17% (one thread) and 9% (eight threads). None of this is confirmatory, and none of it changes the margin of H7a.
