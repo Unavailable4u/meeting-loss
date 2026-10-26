@@ -147,3 +147,30 @@ Rules:
 - Scope: MNIST MLP, arm A's tuned `lr`, `wd`, schedule and batch size (not retuned for tanh), learned `G` with arm D's `lam_inv`, 3,000 steps, ramp of 200 steps, one meeting-loss form (linear in `h`, strength relative to the task gradient at `h`), seeds 1100 to 1129 in three blocks.
 - Implications: (1) Giving the signal more strength does not rescue the idea in this setup: the E-008 result is not a too-weak-signal artifact. (2) The signal is not wrong in direction (alignment +0.8 in tanh); it is redundant with backpropagation at these settings, which is what F-013 suggested from geometry alone. (3) The one clear design lesson: a meeting term that is linear in `h` with the strength tied to the task gradient is unstable when the activation does not saturate; a method that uses such a signal needs a bound or a normalisation of the middle state's scale. (4) The additive use of the signal is exhausted by these checks; what remains open is whether the signal can replace part of backpropagation at a lower cost (check D), and whether a better target changes the picture (check B). The Gate 3 condition of `mechanism-overview.md` is not met. **Correction to F-014's reasoning:** F-014's implication that an unbounded `h` is the cause stands as a hypothesis; the claim in the G1/G2 plan that tanh "bounds `h`" was wrong (see E-014).
 - Found / last re-verified: 2026-10-26 (recomputed from the raw logs on a fresh clone at 5fee443)
+
+## F-016: On this CPU the selective backward arm saves much less wall-clock time per step than FLOPs: 17.5% at one thread and 8.6% at eight, against 38.7%
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (three repeats; the one-thread verdict is within the noise of its 0.85 threshold, per-repeat ratios 0.61 to 0.92)
+- Evidence: E-016 (time per step S30 over A: 0.825 at one thread, 0.914 at eight; exact FLOPs ratio 0.613)
+- Scope: one CPU (WSL2), MNIST MLP at batch 128, A's tuned hyperparameters, a hand-written backward on the plain MLP; no GPU, no wider model, data loading not timed.
+- Implications: (1) The FLOPs saving overstates the speed saving at this model size: top-k selection, the row gather and per-step Python overhead are not in FLOPs. (2) Combined with the step ratios of E-017 and E-018 (about 0.98 to 1.20), a derived and unmeasured estimate puts the time to target at about 0.8 to 1.0 of A's at one thread and 0.9 to 1.1 at eight, so a wall-clock gain is not established. (3) Any wall-clock statement in the paper must come from a measurement of time to target and cover more than one thread setting and, ideally, a larger width or a GPU.
+- Found / last re-verified: 2026-10-26 (recomputed from `results/processed/timing_sw1.csv`)
+
+## F-017: A plain smaller batch does not clearly beat batch 128, and against the best small batch the margin of selective backward shrinks to 12% at 0.97 and 29% at 0.975 (3 seeds)
+- Type: exploratory
+- Status: tentative
+- Confidence: low (3 evaluation seeds; the 0.97 value of the best small batch rests on one seed; the small-batch arms had a lighter tuning than arm A)
+- Evidence: E-017 (verdict PARTIAL; b48 0.889 and 0.921 of A's FLOPs, S30 0.778 and 0.652, S30 over b48 0.876 and 0.708; per-seed values in the entry); E-018 and E-010 for S30's advantage over A on other seeds
+- Scope: MNIST MLP, learning rate tuned only (8 trials, 2 seeds) for batch 32, 48 and 64 with arm A's other settings, horizons of equal samples, S30 with A's hyperparameters, one CPU's worth of FLOP counting (exact).
+- Implications: (1) The baseline-in-batch-size question is not settled: it is neither a clear problem nor clearly fine. By the rule the best small-batch arm joins the reference set of `prereg-v2`. (2) The earlier statement in the prep note that the expected effect is far from a 15% margin holds against arm A (ratios 0.65 to 0.78 here) but **not against the best small batch at 0.97** (0.876, one seed at parity); a 15% margin against the best of all references would be at risk of an inconclusive outcome. (3) S30's advantage over A at 0.97 varies by seed group (0.78 here, 0.65 in E-018, about 0.6 in E-010), so the 0.97 target is the noisier of the two. (4) Options for `prereg-v2`, for the researcher to decide: keep 15% against the best of all references and accept the risk; judge the primary comparison against A1 and report the best small batch as a secondary reference; tune the small-batch arms as fully as A before the test (which makes the reference harder); or lower the margin (a decision with a cost for the claim). None is chosen here.
+- Found / last re-verified: 2026-10-26 (recomputed from the raw logs on a fresh clone at c4d101b)
+
+## F-018: The FLOPs-to-target of selective backward is flat across the kept fraction 0.1 to 0.3 (0.58 to 0.63 of A at 0.975) and worse at 0.5; the knee rule lands on the lowest tested value
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (3 seeds; S10's step penalty at 0.97 is large and seed-dependent)
+- Evidence: E-018 (ratios 0.693 / 0.584, 0.629 / 0.582, 0.646 / 0.626, 0.796 / 0.733 for sel_frac 0.1, 0.2, 0.3, 0.5; steps ratios 1.27 to 0.98 at 0.97); exact per-step cost 0.500, 0.557, 0.613, 0.722
+- Scope: MNIST MLP, arm A's tuned hyperparameters, `sel_warmup` 100, top-loss rows, 3,000 steps, seeds 1210 to 1212.
+- Implications: (1) Keeping fewer rows than 30% gives no clear extra saving: the smaller per-step cost is offset by more steps. (2) The knee rule's answer (0.1) is the edge of the grid; the position of the real optimum is open, and 0.2 looks at least as good as 0.1 on these seeds. (3) The forward pass is 44.4% of A's step, so the achievable per-step saving is bounded at about 56%; the measured best at 0.975 (0.58) is already close to what the per-step bound allows once the extra steps are paid.
+- Found / last re-verified: 2026-10-26 (recomputed from the raw logs on a fresh clone at c4d101b)

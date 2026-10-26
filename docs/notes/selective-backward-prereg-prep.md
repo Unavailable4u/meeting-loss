@@ -62,6 +62,13 @@ The forward pass is 44.4% of A's cost, so **no selection can save more than abou
 
 **Look 3.** The variants are named S10, S20, S30 and S50 (top-loss rows, `sel_warmup` 100, arm A's tuned hyperparameters). The knee rule is applied as written; the pilot's GO/STOP/TUNE rule is not applied in this mode.
 
+## Results of the three looks (2026-10-26; entries E-016 to E-018, findings F-016 to F-018; the rules above were not changed)
+
+- **Look 1 (E-016):** one thread, ratio 0.825, FLOPS SAVING TRANSLATES (within the noise of the 0.85 threshold); eight threads, ratio 0.914, PARTIAL. The per-step time saving is 17.5% and 8.6% against 38.7% in FLOPs.
+- **Look 2 (E-017):** PARTIAL. The best small batch (48) needs 0.89 and 0.92 of A's FLOPs; S30 needs 0.88 and 0.71 of the best small batch's. By the rule the best small-batch arm joins the reference set of `prereg-v2`.
+- **Look 3 (E-018):** the knee is 0.1, the lowest value tested; the curve is flat from 0.1 to 0.3.
+- **Correction of an earlier sentence (D-021 item (c), "Seeds and rule" above):** "the expected effect (about -39%) is far from the 15% margin" holds against arm A, but against the best small batch the margin is 12% at 0.97 on these 3 seeds (F-017). The margin, the reference set and the `sel_frac` values are decisions for D-021 and are not made here.
+
 ## The hybrid arm (meeting loss on the selected rows)
 
 Include it in `prereg-v2` **only if** check L (`linking-measurement-concentration.md`) ends NOT SELECTIVE or PARTIAL. If it ends ALREADY SELECTIVE, skip it (predicted null, no information). If included: one arm, labeled exploratory, with the expectation "null" written before the run, outside the primary hypothesis and outside the multiplicity of the primary comparison.
