@@ -102,3 +102,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Docs updated: [x] PLAN  [x] HYPOTHESES  [x] METHOD  [ ] FINDINGS (no result yet)  [ ] LITERATURE (citations of selective backprop still to verify before any claim)  [ ] RISKS  [ ] CLAIMS  [ ] PAPER_DRAFT  [ ] FIGURES
 - Experiments invalidated or needing rerun: none. Regression check of the code that will be locked: E-011 attempt 4 PASS (bit-identical); 180 tests pass.
 
+
+## DR-013: Status lines of the locked HYPOTHESES.md updated after the `prereg-v2` results; claims C-21 and C-27 restated to the locked rules
+- Date: 2026-10-27
+- Trigger: change to a file under the `prereg-v2` lock (`docs/HYPOTHESES.md`), made to record outcomes (not a change of any pre-registered hypothesis, threshold, rule, shift rule, group or seed set); same procedure as DR-006
+- What changed: before: the Status lines of H7a and H7b read "open". After: both read "supported" with the numbers and the finding IDs, and the Linked-findings lines name F-019 and E-022. The statements, metrics, margins, shift rule and roles of D-023 are untouched (the diff against the tag is limited to Status and Linked-findings lines). `paper/CLAIMS.md`: C-21 was written before the test as "against the best of the tuned baselines" and is restated to what H7a tests (S30 against A1, with the re-tuning shift); C-27 is new (H7b); C-13 and C-22 are annotated. Not pre-registered and therefore exploratory: the per-seed counts (20 of 20), the per-seed ratios, the independent recomputation with separate code, the comparison of S30 against the best further tuning of A on these seeds, and the 95% interval check.
+- Decision recorded: none (D-023 stands)
+- Docs updated: [x] PLAN  [x] HYPOTHESES (status lines only)  [ ] METHOD (no change)  [ ] DECISIONS  [x] EXPERIMENT_LOG (E-022)  [x] FINDINGS (F-019)  [ ] RISKS (R-21 outcome not yet written)  [x] CLAIMS (C-21, C-27; C-13, C-22 annotated)  [ ] LITERATURE (still to verify)  [ ] FIGURES  [ ] PAPER_DRAFT
+- Experiments invalidated or needing rerun: none.
