@@ -203,6 +203,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 - Consequences: a confirmatory test needs a new hypothesis in `docs/HYPOTHESES.md`, a lock tag, and an updated lock check in `scripts/run_final.py` (it is tied to `prereg-v1`). Until then every statement about arm S is conditional on the pilot's scope: 3 seeds, one MLP, A's hyperparameters, FLOPs not wall-clock (R-21 applies).
 - Evidence: E-009, E-010, F-012; `docs/notes/selective-backward-pilot.md`.
 - Note (2026-10-25): OPEN item (b) (the baseline) is addressed by D-022 (proposed); the other OPEN items stay open.
+- Note (2026-10-26): the three looks of the preparation (E-016 to E-018, F-016 to F-018) are done and give inputs, not decisions: wall-clock time per step translates only partly (0.83 at one thread, 0.91 at eight); against the best small batch the margin of S30 is 12% at 0.97 and 29% at 0.975 on 3 seeds, which bears on items (b) and (c) (the reference set and the 15% margin); the knee of the `sel_frac` curve is the lowest tested value, 0.1. All OPEN items stay open.
 
 ## D-020: After Stage 3: keep both lines in one project and one paper; run the Stage 4 mechanism checks and the selective-backward preparation; accepted by the researcher on 2026-10-25
 - Date: 2026-10-25
