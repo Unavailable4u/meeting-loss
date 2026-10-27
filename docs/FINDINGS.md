@@ -183,3 +183,12 @@ Rules:
 - Scope: MNIST MLP (D-008), 3,000 steps (B48 8,000), S with `sel_frac` 0.3, `sel_mode` top, `sel_warmup` 100 and the hyperparameters of A1, seeds 1300 to 1319, FLOPs as counted by `src/flops.py` (full-batch forward plus the backward pass of the rows kept; the selection and the gather are not counted); one CPU for the timing evidence
 - Implications: the first confirmatory positive result of the project and the claim C-21 and C-27 can carry, worded as in `paper/CLAIMS.md`. It is a controlled, compute-matched confirmation of a known method (Selective-Backprop, Jiang et al. 2019; online hard example mining), with the baseline's tuning noise and a batch-size control built in; it is not a new method. The saving in FLOPs is larger than the saving in time on this CPU (F-016); generality beyond this setting is open (C-24). A plain smaller batch does not clearly beat batch 128 either (B48 against A1: -7.0% [-13.7, +0.2] and -4.6% [-11.9, +3.6]), which agrees with F-017.
 - Found / last re-verified: 2026-10-27
+
+## F-020: Keeping 20% of the rows instead of 30% saved a further 7% to 8% of the FLOPs at 0.97 and 0.975 with the same number of steps; no early step penalty is visible (exploratory contrast on the `prereg-v2` logs)
+- Type: exploratory (post hoc on the seeds of the confirmatory test; the contrast was not pre-registered; the reading rule was fixed before the run)
+- Status: tentative
+- Confidence: low to medium (20 paired seeds but the same seeds as H7a and H7b; the interval at 0.975 reaches -1.1%; one MLP, A1's hyperparameters)
+- Evidence: E-023. S20 against S30: -7.9% [-12.6, -3.4] at 0.97 and -7.2% [-12.6, -1.1] at 0.975 in FLOPs; steps -0.3% [-5.7, +5.1] and +1.1% [-5.1, +8.1]; per-step cost 86.33 M against 95.09 M FLOPs; equal-step accuracy differences within -0.11 and +0.06 percentage points.
+- Scope: MNIST MLP, kept fractions 0.2 and 0.3, `sel_mode` top, warm-up 100, A1's hyperparameters, seeds 1300 to 1319, FLOPs only.
+- Implications: the kept fraction is a small lever (about 7% to 8% between 0.3 and 0.2), and the evidence favours a lower constant fraction over a schedule that starts high; the lowest fraction without a step penalty is unknown (F-018: S10 pays about 27% more steps at 0.97 on 3 seeds). The warm-up costs 11% to 12% of the FLOPs to 0.975 and has never been varied. This is a lead for a planned exploratory sweep, not a claim, and not a statement about Selective-Backprop.
+- Found / last re-verified: 2026-10-27
