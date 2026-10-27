@@ -11,6 +11,13 @@ the selected rows' gradient is divided by the FULL batch size B, not by the numb
 
 Config keys: sel_frac (default 0.3), sel_warmup (steps with the full backward pass, default 0),
 sel_mode ("top" = highest loss, or "random" = a random subset of the same size: the control).
+
+Optional keys added for the Improve track (D-024, D-025; every default leaves the behaviour above unchanged):
+sel_score ("loss" = rank rows by their loss, default; "gradnorm" = rank by the norm of the last-layer gradient,
+norm(softmax - one_hot), the bound of Katharopoulos and Fleuret 2018, free in the same forward pass);
+sel_schedule ("none" default; "osgd" = the kept fraction follows the default rule of Ordered SGD, Kawaguchi and Lu 2020:
+1, 1/2, 1/4, 1/8, 1/16 of the batch once the running training accuracy of the last epoch passes 80, 90, 95, 99.5 percent;
+"linear" = from sel_frac_start to sel_frac_end over the steps after the warm-up).
 """
 import math
 
@@ -40,12 +47,57 @@ def _dact(z, a, kind):
     return (z > 0).to(z.dtype) if kind == "relu" else 1.0 - a * a
 
 
-def n_selected(batch_size, step, cfg):
-    """Number of rows that go through the backward pass at this step."""
-    frac = cfg.get("sel_frac", 0.3)
+def linear_frac(step, cfg):
+    """Kept fraction of the linear schedule: sel_frac_start at the end of the warm-up, sel_frac_end at max_steps."""
+    warm = cfg.get("sel_warmup", 0)
+    span = max(1, cfg["max_steps"] - warm)
+    t = min(1.0, max(0.0, (step - warm) / span))
+    return cfg["sel_frac_start"] + (cfg["sel_frac_end"] - cfg["sel_frac_start"]) * t
+
+
+def n_selected(batch_size, step, cfg, frac=None):
+    """Number of rows that go through the backward pass at this step. `frac` (a schedule's current value) overrides
+    sel_frac; with sel_schedule "linear" the fraction is computed from the step."""
+    if frac is None:
+        if cfg.get("sel_schedule", "none") == "linear":
+            frac = linear_frac(step, cfg)
+        else:
+            frac = cfg.get("sel_frac", 0.3)
     if step < cfg.get("sel_warmup", 0) or frac >= 1.0:
         return batch_size
     return min(batch_size, max(1, math.ceil(frac * batch_size)))
+
+
+OSGD_RULE = ((0.995, 16), (0.95, 8), (0.90, 4), (0.80, 2))     # (training accuracy at least, divisor of the batch size)
+
+
+def osgd_divisor(train_acc):
+    """Ordered SGD's default rule for q (Kawaguchi and Lu 2020): q = s, s/2, s/4, s/8, s/16."""
+    for thr, div in OSGD_RULE:
+        if train_acc >= thr:
+            return div
+    return 1
+
+
+class OsgdSchedule:
+    """Kept fraction 1/divisor, updated at the end of every epoch from the running training accuracy of that epoch
+    (the accuracy of the forward predictions on the batches seen, an approximation of the paper's training accuracy)."""
+
+    def __init__(self):
+        self.div, self.correct, self.n = 1, 0, 0
+
+    @property
+    def frac(self):
+        return 1.0 / self.div
+
+    def observe(self, stats):
+        self.correct += stats["correct"]
+        self.n += stats["n"]
+
+    def end_epoch(self):
+        if self.n:
+            self.div = osgd_divisor(self.correct / self.n)
+        self.correct = self.n = 0
 
 
 def select_indices(losses, k, mode="top", generator=None):
@@ -57,9 +109,11 @@ def select_indices(losses, k, mode="top", generator=None):
     raise ValueError(f"unknown sel_mode {mode!r}")
 
 
-def selective_step(model, x, y, cfg, step):
+def selective_step(model, x, y, cfg, step, k=None, frac=None, stats=None):
     """Forward the full batch, back-propagate only the selected rows, and write .grad on every parameter.
-    Returns (mean loss over the full batch, number of rows back-propagated, selected indices or None)."""
+    Returns (mean loss over the full batch, number of rows back-propagated, selected indices or None).
+    Optional: k (number of rows, overrides everything), frac (current kept fraction of a schedule), stats (a dict that
+    receives the number of correct predictions and rows of the full batch)."""
     (l1, l2, l3, l4), kind = _layers(model)
     B = x.shape[0]
     with torch.no_grad():
@@ -70,12 +124,20 @@ def selective_step(model, x, y, cfg, step):
         z4 = F.linear(a3, l4.weight, l4.bias)
         losses = F.cross_entropy(z4, y, reduction="none")
 
-        k = n_selected(B, step, cfg)
+        if stats is not None:
+            stats["correct"] = int((z4.argmax(1) == y).sum())
+            stats["n"] = B
+        if k is None:
+            k = n_selected(B, step, cfg, frac)
+        k = min(k, B)
         if k == B:
             idx = None
             take = lambda t: t
         else:
-            idx = select_indices(losses, k, cfg.get("sel_mode", "top"))
+            score = losses
+            if cfg.get("sel_score", "loss") == "gradnorm":
+                score = (torch.softmax(z4, dim=1) - F.one_hot(y, z4.shape[1]).to(z4.dtype)).norm(dim=1)
+            idx = select_indices(score, k, cfg.get("sel_mode", "top"))
             take = lambda t: t[idx]
 
         # backward, only for the selected rows; gradients are divided by the FULL batch size B

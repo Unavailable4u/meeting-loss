@@ -1,6 +1,6 @@
 # Improve track: reference arms and candidate levers (spec before any code or run)
 
-**Status:** specification written 2026-10-27 after reading the closest prior work (`docs/LITERATURE.md`, section "Selective backward and batch selection") and the official Selective-Backprop code. It fixes what the reference arms are and how their cost is counted. It runs nothing. The choices marked **OPEN** are the researcher's (D-025, D-024).
+**Status:** specification written 2026-10-27 after reading the closest prior work (`docs/LITERATURE.md`, section "Selective backward and batch selection") and the official Selective-Backprop code. It fixes what the reference arms are and how their cost is counted. The choices of section 4 were accepted by the researcher on 2026-10-27 (D-025); the arms are implemented (`src/sb.py`, DR-014) and the headroom plan is `docs/notes/improve-headroom-plan.md`.
 
 ## 1. What a contribution has to beat
 The rule behind our arm S (top-k rows of a forward batch, backward only through them) is Ordered SGD (Kawaguchi and Lu 2020) and, for region proposals, OHEM (Shrivastava et al. 2016). A kept fraction that shrinks during training is the default rule of Ordered SGD (q = s at the start, then s/2, s/4, s/8, s/16 when the training accuracy passes 80%, 90%, 95%, 99.5%). Selective-Backprop (Jiang et al. 2019) skips backward passes by a probabilistic rule at fixed training-batch size. So a method claim needs a comparison against these under our protocol, not only against A1.
@@ -32,8 +32,16 @@ Each arm is a lever from `component-ledger.md` or from the literature; none is c
 5. **S warm-up** 0, 25, 50, 100 steps at the best fraction (the warm-up is 11% to 12% of the cost to 0.975).
 6. **Overhead** (wall-clock): kept separate; it is an implementation question.
 
-## 4. Decisions needed from the researcher (OPEN)
+## 4. Decisions (accepted by the researcher on 2026-10-27; the defaults proposed below were taken as written)
 - Primary SB setting: beta 2 or 3; one-epoch priming as released, or 100 steps as in S (the second isolates the selection rule from the warm-up). Default proposed: beta 2, released priming, plus the 100-step variant as secondary.
 - Cached or uncached as the primary count. Default proposed: report both; the uncached count is the released algorithm, the cached one is what an ideal implementation costs.
 - Whether the headroom study may include arm 3 and 4 before `prereg-v3` (they are exploratory; a confirmatory plan would then pick at most the arms with a stated reason).
 - Any change to `src/` for the new arms follows D-024 (additive, drift entry, regression check, tests).
+
+## 5. Implementation notes (`src/sb.py`, written 2026-10-27)
+- Follows the released code: history of the last 1,024 forward losses updated before the percentiles are taken, strict "below" percentile, probability percentile^beta with floor 0, independent keep decisions, a queue of kept rows, at most one update per forward batch, a second forward pass for the update, one-epoch priming. Steps count updates.
+- Priming steps are charged as ordinary steps of arm A (the released code also runs a redundant second forward pass there); with `sb_prime_steps` equal to the run length the log is bit-identical to arm A's (tested).
+- `flops` is the released algorithm's count (every selection forward pass plus a full ordinary step per update); `flops_cached` charges only the backward part of the update. Both come from the same run; the gradient is always computed with a fresh forward pass.
+- Ties: float32 cross-entropy is exactly 0 for very confident rows, so many losses can tie and the strict percentile of a tied row is the share strictly below it; the kept rate can then fall below 1/(beta+1) (on a trivially separable synthetic set it fell to 3%). This is the released behaviour; `sel_rate` and the forward batches per update are logged. A run stops with an error if forward batches exceed 200 times the update budget.
+- Added to `selective_step`: `sel_score` ("loss" or "gradnorm"), `sel_schedule` ("osgd" or "linear"), and the optional `k`, `frac`, `stats` arguments; the defaults leave every existing run bit-identical (DR-014).
+

@@ -4,7 +4,7 @@ from torch.utils.flop_counter import FlopCounterMode
 from src.model import compute_losses
 
 
-def flops_per_step(model, opt, batch, cfg, step=10**9):
+def flops_per_step(model, opt, batch, cfg, step=10**9, k=None):
     """FLOPs of one full training step (forward + backward) for this arm,
     including G or auxiliary heads. Optimizer FLOPs are ignored (small)."""
     x, y = batch
@@ -12,7 +12,7 @@ def flops_per_step(model, opt, batch, cfg, step=10**9):
     with FlopCounterMode(display=False) as fc:
         if model.arm == "selective":
             from src.selective import selective_step
-            selective_step(model, x, y, cfg, step)
+            selective_step(model, x, y, cfg, step, k=k)
         else:
             loss, _, _, _ = compute_losses(model, x, y, cfg, step=step)
             loss.backward()

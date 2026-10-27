@@ -23,6 +23,16 @@ eta_hat: 0.1                   # meet_grad only: target = h - eta_hat * per-samp
 sel_frac: 0.3                  # fraction of each batch that goes through the backward pass
 sel_warmup: 100                # steps with the full backward pass first
 sel_mode: top                  # top (highest loss) | random (control: same size, random rows)
+# Improve track options (D-025, DR-014); every default leaves existing runs unchanged:
+# sel_score: loss              # loss | gradnorm (rank rows by the last-layer gradient norm, Katharopoulos and Fleuret 2018)
+# sel_schedule: none           # none | osgd (kept fraction 1, 1/2, ..., 1/16 at 80/90/95/99.5% training accuracy) | linear
+# sel_frac_start: 0.1          # linear schedule: kept fraction after the warm-up ...
+# sel_frac_end: 0.5            # ... and at max_steps
+# arm: sb                      # Selective-Backprop (src/sb.py); keys:
+# sb_beta: 2.0                 # selection power: kept share about 1/(beta+1)
+# sb_history: 1024             # number of recent losses the percentile is taken over
+# sb_prime_steps: 429          # ordinary steps first (default: one epoch = len(train_loader))
+# sb_sampling_min: 0.0         # floor of the keep probability
 # auxiliary-loss arms (deepsup B, ae C)
 lam_aux: 0.3
 aux_sched: const               # const | linear (decays to zero over max_steps, DSN paper)
