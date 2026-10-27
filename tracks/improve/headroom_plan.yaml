@@ -1,0 +1,22 @@
+# Improve-track headroom study (exploratory; D-024, D-025; docs/notes/improve-headroom-plan.md).
+# Not a confirmatory plan: no lock tag. Run with: python tracks/improve/run_headroom.py --workers 4 --threads 1
+# Seeds 2100 to 2109 only; 2110 to 2199 stay free for follow-up looks (never reuse a seed across looks of the same question).
+horizon_steps: 3000
+seed_block: "2100-2199"
+out_dir: results/raw/improve_headroom
+groups:
+  - {name: A1, config: tracks/improve/configs/hr-A1.yaml, seeds: "2100-2109", role: reference, note: "arm A, A1's tuned config: the paired reference on the same seeds"}
+  - {name: S30, config: tracks/improve/configs/hr-S30.yaml, seeds: "2100-2109", role: control, note: "S as in prereg-v2 (kept 0.3, warm-up 100) on fresh seeds"}
+  - {name: S25, config: tracks/improve/configs/hr-S25.yaml, seeds: "2100-2109", role: descriptive, note: "kept fraction 0.25"}
+  - {name: S20, config: tracks/improve/configs/hr-S20.yaml, seeds: "2100-2109", role: descriptive, note: "kept fraction 0.2"}
+  - {name: S15, config: tracks/improve/configs/hr-S15.yaml, seeds: "2100-2109", role: descriptive, note: "kept fraction 0.15"}
+  - {name: S10, config: tracks/improve/configs/hr-S10.yaml, seeds: "2100-2109", role: descriptive, note: "kept fraction 0.1 (F-018: more steps at 0.97)"}
+  - {name: S20w0, config: tracks/improve/configs/hr-S20w0.yaml, seeds: "2100-2109", role: descriptive, note: "kept 0.2, no warm-up"}
+  - {name: S20w25, config: tracks/improve/configs/hr-S20w25.yaml, seeds: "2100-2109", role: descriptive, note: "kept 0.2, warm-up 25 steps"}
+  - {name: S20w50, config: tracks/improve/configs/hr-S20w50.yaml, seeds: "2100-2109", role: descriptive, note: "kept 0.2, warm-up 50 steps"}
+  - {name: S20gn, config: tracks/improve/configs/hr-S20gn.yaml, seeds: "2100-2109", role: descriptive, note: "kept 0.2, rows ranked by the last-layer gradient norm (Katharopoulos and Fleuret) instead of the loss"}
+  - {name: SOSGD, config: tracks/improve/configs/hr-SOSGD.yaml, seeds: "2100-2109", role: descriptive, note: "Ordered-SGD rule for q: 1, 1/2, 1/4, 1/8, 1/16 of the batch at 80, 90, 95, 99.5 percent training accuracy"}
+  - {name: Sup, config: tracks/improve/configs/hr-Sup.yaml, seeds: "2100-2109", role: descriptive, note: "kept fraction rising linearly from 0.1 to 0.5 after the warm-up (selection pressure falling, Loshchilov and Hutter)"}
+  - {name: SB2, config: tracks/improve/configs/hr-SB2.yaml, seeds: "2100-2109", role: secondary, note: "Selective-Backprop as released, beta 2 (about 33% kept), one-epoch priming, second forward pass counted"}
+  - {name: SB2p100, config: tracks/improve/configs/hr-SB2p100.yaml, seeds: "2100-2109", role: secondary, note: "Selective-Backprop, beta 2, priming 100 steps as in S"}
+  - {name: SB3, config: tracks/improve/configs/hr-SB3.yaml, seeds: "2100-2109", role: descriptive, note: "Selective-Backprop at the released default beta 3 (about 25% kept)"}

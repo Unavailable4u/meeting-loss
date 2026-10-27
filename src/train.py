@@ -21,7 +21,7 @@ from src.crossing import DEFAULT_CROSSING, crossing_index
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
 from src.model import MEET_ARMS, MeetNet, compute_losses
-from src.selective import selective_step
+from src.selective import OsgdSchedule, selective_step
 from src.utils import set_seed
 
 
@@ -79,6 +79,9 @@ def build_optimizer(model, cfg):
 def run(cfg, device="cpu", data=None):
     """Train one run. `data` may be a (train_loader, val_loader) pair (used by tests);
     by default the fixed MNIST split from src/data.py (decision D-008) is loaded."""
+    if cfg["arm"] == "sb":                          # Selective-Backprop has its own loop (src/sb.py, D-025)
+        from src.sb import run_sb
+        return run_sb(cfg, device, data)
     set_seed(cfg["seed"])
     if data is None:
         from src.data import get_data               # imported lazily: needs torchvision
@@ -91,6 +94,9 @@ def run(cfg, device="cpu", data=None):
     selective = cfg["arm"] == "selective"
     warm = cfg.get("sel_warmup", 0) if selective else 0
     fps_warm = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg, step=0) if warm else fps
+    dyn = selective and cfg.get("sel_schedule", "none") != "none"      # a schedule changes k, hence the cost per step
+    osgd = OsgdSchedule() if dyn and cfg["sel_schedule"] == "osgd" else None
+    cost_by_k, steps_per_epoch = {}, len(train_loader)
 
     log, step, t0, cum_flops = [], 0, time.time(), 0
     while step < cfg["max_steps"]:
@@ -98,15 +104,28 @@ def run(cfg, device="cpu", data=None):
             x, y = x.to(device), y.to(device)
             opt.zero_grad(set_to_none=True)
             if selective:
-                loss_t, k, _ = selective_step(model, x, y, cfg, step)
+                if dyn:
+                    stats = {}
+                    loss_t, k, _ = selective_step(model, x, y, cfg, step, frac=osgd.frac if osgd else None, stats=stats)
+                    if osgd:
+                        osgd.observe(stats)
+                else:
+                    loss_t, k, _ = selective_step(model, x, y, cfg, step)
                 parts = {"task": loss_t, "k": torch.tensor(float(k))}
             else:
                 loss, parts, _, _ = compute_losses(model, x, y, cfg, step)
                 loss.backward()
             opt.step()
             sched.step()
-            cum_flops += fps_warm if step < warm else fps
+            if dyn:
+                if k not in cost_by_k:
+                    cost_by_k[k] = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg, step=step, k=k)
+                cum_flops += cost_by_k[k]
+            else:
+                cum_flops += fps_warm if step < warm else fps
             step += 1
+            if osgd and step % steps_per_epoch == 0:
+                osgd.end_epoch()
             if step % cfg["eval_every"] == 0:
                 row = dict(step=step, flops=cum_flops, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),

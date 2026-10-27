@@ -57,3 +57,4 @@ Labels: **KEEP** (use as is), **CONTROL** (always include as a comparison), **VA
 | Gradient-norm bound as the score (norm of softmax minus one-hot) | Katharopoulos and Fleuret 2018 | Loss is a weaker proxy than the bound early in training; the bound is free in the forward pass | **OPEN**: cheap to test inside S (same cost per step) |
 | Switch selection on only when it pays | Katharopoulos and Fleuret 2018 | A variance-reduction estimate decides when | **OPEN**: our fixed 100-step warm-up (11% to 12% of the cost) is a stand-in |
 
+Status 2026-10-27 (after D-025 and DR-014): the arms for the first four rows (and the rising-fraction arm) are implemented and tested; the headroom plan is fixed in `docs/notes/improve-headroom-plan.md`; none has been run, so every row stays OPEN.

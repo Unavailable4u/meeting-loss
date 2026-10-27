@@ -1,0 +1,25 @@
+# Improve-track headroom study (docs/notes/improve-headroom-plan.md), group SB3: Selective-Backprop at the released default beta 3 (about 25% kept).
+# Derived from configs/tuned/t1_base_two.yaml by tracks/improve/make_headroom_configs.py; do not edit.
+stage: hr-SB3
+arm: sb
+seed: 0
+act: relu
+lr: 0.00129836
+wd: 0.000130564
+batch_size: 128
+max_steps: 3000
+eval_every: 50
+device: auto
+lr_schedule: cosine
+low_lr_mult: 1.0
+lam_meet: 0.1
+lam_inv: 1.0
+warmup_steps: 500
+sigma_inv: 0.0
+eta_hat: 0.1
+lam_aux: 0.3
+aux_sched: const
+aux_gamma: 0.0
+aux_lr_decay: none
+sb_beta: 3.0
+sb_history: 1024

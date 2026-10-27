@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 MEET_ARMS = ("meet", "meet_ao", "meet_frozen")
-ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective", "meet_rho")
+ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective", "meet_rho", "sb")  # sb: same network as base (src/sb.py)
 
 
 def _act(name):
