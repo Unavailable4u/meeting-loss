@@ -46,3 +46,14 @@ Labels: **KEEP** (use as is), **CONTROL** (always include as a comparison), **VA
 3. **Vary (the Improve track's levers, in the order the data supports):** (a) a lower constant kept fraction: the paired S20 against S30 contrast (E-023, F-020) gives -7% to -8% FLOPs with the same steps, and no sign of an early penalty, so a schedule is not supported; the lowest fraction without a step penalty (between 0.1 and 0.2) is still to be found; (b) warm-up length (11% to 12% of the cost, never varied); (c) the selection rule itself (Selective-Backprop's probabilistic rule against our top-k; to be read from the paper before coding); (d) per-step overhead (wall-clock: 0.83 and 0.91 of A's time per step against 0.61 of its FLOPs, F-016), which may be a larger lever than (a) and (b).
 4. **Replace:** the hand-set kept fraction 0.3 by a better constant (E-023 suggests 0.2 or lower); a schedule only if a later look shows a step penalty that depends on the stage of training.
 5. **Do not do:** combine components until something wins. A component enters a confirmatory plan only with a stated reason from this table, on seeds that were not used to pick it.
+
+## E. Literature-derived levers (added 2026-10-27, D-025; none has been run in our protocol)
+
+| Lever | Source | What it says | Our status |
+|---|---|---|---|
+| Probabilistic selection by loss percentile with full-size training batches (Selective-Backprop) | Jiang et al. 2019; code read | Costs extra selection forward passes; in our counter 2.33 to 2.78 times a plain update uncached (1.89 to 2.33 cached) | **OPEN**: the reference arm to build; unknown whether it needs fewer than about half of A's updates |
+| Kept fraction that shrinks with training accuracy (q = s, s/2, s/4, s/8, s/16 at 80%, 90%, 95%, 99.5%) | Kawaguchi and Lu 2020 | Default rule of Ordered SGD, aimed at test error | **OPEN**: E-023 saw no early penalty of 0.2 against 0.3 and no support for high-then-low; the rule has not been tested under FLOPs |
+| Selection pressure decreased over epochs | Loshchilov and Hutter 2015 (MNIST) | Opposite direction to the line above | **OPEN**: test both directions, one arm each |
+| Gradient-norm bound as the score (norm of softmax minus one-hot) | Katharopoulos and Fleuret 2018 | Loss is a weaker proxy than the bound early in training; the bound is free in the forward pass | **OPEN**: cheap to test inside S (same cost per step) |
+| Switch selection on only when it pays | Katharopoulos and Fleuret 2018 | A variance-reduction estimate decides when | **OPEN**: our fixed 100-step warm-up (11% to 12% of the cost) is a stand-in |
+
