@@ -44,3 +44,13 @@ nohup python tracks/improve/run_headroom.py --plan tracks/improve/look2_plan.yam
 python tracks/improve/look2_analysis.py          # after all 120 runs have finished
 ```
 My guess is 1 to 1.5 hours on 4 workers (all arms are cheaper than Selective-Backprop; look 1 had 30 Selective-Backprop runs). Log the outcome as E-025 (exploratory) in the same commit as the raw logs.
+
+## Outcome (added 2026-10-29, after the runs; the text above is unchanged)
+All 120 runs finished (4,542 s) on commit a2d1499e; the reading rules were applied as written and no seed, threshold or rule was changed. Full numbers in E-025; conclusions in F-023 and F-024.
+- **R1:** S20w0 against S20 REPLICATED (-13.8% / -12.0%, look 1: -17.8% / -14.6%); S15 against S30 REPLICATED (-12.2% / -10.1%).
+- **R2:** S15w0 and S10w0 against S20w0: NO GAIN (S10w0 worse at the point estimates, +24% steps).
+- **R3:** warm-up dose MIXED (w5 -13.4% / -7.1%, w10 -14.0% / -10.4%, w25 -3.9% / -4.9%).
+- **R4:** gradient scale NO CLEAR EFFECT in both groups: SCALE DOES NOT MATTER.
+- **Against the predictions of question 3 and 4:** hypothesis B (optimizer state) predicted a graded dose and a gain for S20k; the dose is not graded and S20k did not meet the bar (its point changes, -5.4% / -9.2%, lean towards a gain). Hypothesis C (step at zero) predicted no effect at 5, 10 and 25; w5 and w10 show effects. Neither is supported; neither is excluded by a decisive test.
+- **R5, R6:** cheapest S arm S20w0; leads for `prereg-v3`: S20w0 and S15.
+- Not in the plan, found after the results (extra looks, `tracks/improve/look2_extra.py`): about half of the S20w0 saving against S20 is the arithmetic cost of the warm-up's full steps (6.87 of 12.05 and 14.64 GFLOPs).
