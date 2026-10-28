@@ -1,0 +1,19 @@
+# Improve-track look 2 (exploratory; D-024, D-025; docs/notes/improve-look2-plan.md).
+# Not a confirmatory plan: no lock tag. Run with: python tracks/improve/run_headroom.py --plan tracks/improve/look2_plan.yaml --workers 4 --threads 1
+# Seeds 2110 to 2119 (look 1 used 2100 to 2109); 2120 to 2199 stay free.
+horizon_steps: 3000
+seed_block: "2100-2199"
+out_dir: results/raw/improve_look2
+groups:
+  - {name: A1, config: tracks/improve/configs_look2/l2-A1.yaml, seeds: "2110-2119", role: reference, note: "arm A, A1's tuned config: the paired reference on the same seeds"}
+  - {name: S30, config: tracks/improve/configs_look2/l2-S30.yaml, seeds: "2110-2119", role: control, note: "S as in prereg-v2 (kept 0.3, warm-up 100)"}
+  - {name: S20, config: tracks/improve/configs_look2/l2-S20.yaml, seeds: "2110-2119", role: descriptive, note: "kept 0.2, warm-up 100: the reference of the warm-up and scale questions"}
+  - {name: S15, config: tracks/improve/configs_look2/l2-S15.yaml, seeds: "2110-2119", role: descriptive, note: "replication of S15 of look 1"}
+  - {name: S20w0, config: tracks/improve/configs_look2/l2-S20w0.yaml, seeds: "2110-2119", role: descriptive, note: "replication of S20 without warm-up (look 1: -17.8% / -14.6% against S20)"}
+  - {name: S15w0, config: tracks/improve/configs_look2/l2-S15w0.yaml, seeds: "2110-2119", role: descriptive, note: "combination: kept 0.15, no warm-up"}
+  - {name: S10w0, config: tracks/improve/configs_look2/l2-S10w0.yaml, seeds: "2110-2119", role: descriptive, note: "combination: kept 0.1, no warm-up"}
+  - {name: S20w5, config: tracks/improve/configs_look2/l2-S20w5.yaml, seeds: "2110-2119", role: descriptive, note: "warm-up dose: 5 steps"}
+  - {name: S20w10, config: tracks/improve/configs_look2/l2-S20w10.yaml, seeds: "2110-2119", role: descriptive, note: "warm-up dose: 10 steps"}
+  - {name: S20w25, config: tracks/improve/configs_look2/l2-S20w25.yaml, seeds: "2110-2119", role: descriptive, note: "warm-up dose: 25 steps"}
+  - {name: S20k, config: tracks/improve/configs_look2/l2-S20k.yaml, seeds: "2110-2119", role: descriptive, note: "kept 0.2, warm-up 100, gradient divided by the number of kept rows (gradient-scale test)"}
+  - {name: S20w0k, config: tracks/improve/configs_look2/l2-S20w0k.yaml, seeds: "2110-2119", role: descriptive, note: "kept 0.2, no warm-up, gradient divided by the number of kept rows (gradient-scale test)"}
