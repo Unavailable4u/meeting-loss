@@ -6,7 +6,7 @@ Everything lives on `main` (D-024). A track is a folder and a plan note, not a b
 |---|---|---|---|
 | Paper | Evaluation and negative-results paper: meeting-loss diagnosis, tuning noise, the controlled S30 confirmation | `paper/` (draft, claims) and `tracks/paper/` (scripts for figures, wall-clock analysis, a second setting) | to be written per item |
 | Mechanism | Why does the meeting loss fail? Checks B, D, C (Gate 1 and 2 of `mechanism-overview.md`) | `tracks/mechanism/` | `mechanism-b-oracle-arm.md`, `mechanism-d-replacement-test.md`, `mechanism-c-deep-network-sgd.md` |
-| Improve | Can a method beat Selective-Backprop under our protocol (for example a kept fraction that changes during training)? | `tracks/improve/` | to be written: the faithful Selective-Backprop arm, the headroom study, then a pre-registered plan |
+| Improve | Can a method beat Selective-Backprop under our protocol (for example a kept fraction that changes during training)? | `tracks/improve/` | `improve-reference-arms.md`, `improve-headroom-plan.md`, `improve-look2-plan.md`; then a pre-registered plan (`prereg-v3`) |
 
 Create a track folder when its first script or config is written; keep a short `README.md` in it saying what each file does.
 
