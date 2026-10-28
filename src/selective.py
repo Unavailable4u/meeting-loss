@@ -17,7 +17,10 @@ sel_score ("loss" = rank rows by their loss, default; "gradnorm" = rank by the n
 norm(softmax - one_hot), the bound of Katharopoulos and Fleuret 2018, free in the same forward pass);
 sel_schedule ("none" default; "osgd" = the kept fraction follows the default rule of Ordered SGD, Kawaguchi and Lu 2020:
 1, 1/2, 1/4, 1/8, 1/16 of the batch once the running training accuracy of the last epoch passes 80, 90, 95, 99.5 percent;
-"linear" = from sel_frac_start to sel_frac_end over the steps after the warm-up).
+"linear" = from sel_frac_start to sel_frac_end over the steps after the warm-up);
+sel_scale ("B" = divide the summed gradient of the kept rows by the batch size, i.e. the full-batch gradient minus the part
+of the omitted rows, default; "k" = divide by the number of kept rows, the mean over the kept rows as in Ordered SGD; the two
+are equal whenever all rows are kept; added for look 2 of the Improve track, DR-015).
 """
 import math
 
@@ -140,9 +143,10 @@ def selective_step(model, x, y, cfg, step, k=None, frac=None, stats=None):
             idx = select_indices(score, k, cfg.get("sel_mode", "top"))
             take = lambda t: t[idx]
 
-        # backward, only for the selected rows; gradients are divided by the FULL batch size B
+        # backward, only for the selected rows; gradients are divided by the FULL batch size B (sel_scale "B", the
+        # default) or by the number of kept rows k (sel_scale "k")
         p = torch.softmax(take(z4), dim=1)
-        d4 = (p - F.one_hot(take(y), p.shape[1]).to(p.dtype)) / B
+        d4 = (p - F.one_hot(take(y), p.shape[1]).to(p.dtype)) / (k if cfg.get("sel_scale", "B") == "k" else B)
         l4.weight.grad = d4.t() @ take(a3);                 l4.bias.grad = d4.sum(0)
         d3 = (d4 @ l4.weight) * _dact(take(z3), take(a3), kind)
         l3.weight.grad = d3.t() @ take(a2);                 l3.bias.grad = d3.sum(0)

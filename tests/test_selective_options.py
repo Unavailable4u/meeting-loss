@@ -128,3 +128,49 @@ def test_default_schedule_option_leaves_the_selective_run_unchanged():
     b = run({**cfg, "sel_schedule": "none", "sel_score": "loss"}, device="cpu", data=_loaders())
     strip = lambda log: [{k: v for k, v in r.items() if k != "time"} for r in log]
     assert strip(a) == strip(b)
+
+
+def _autograd_grads(m, x, y, idx, denom):
+    m.zero_grad(set_to_none=True)
+    (F.cross_entropy(m(x), y, reduction="none")[idx].sum() / denom).backward()
+    return [p.grad.clone() for p in m.parameters()]
+
+
+def test_sel_scale_k_is_the_mean_over_the_kept_rows_and_B_the_default():
+    torch.manual_seed(0)
+    m = MeetNet(arm="selective")
+    x, y = _batch()
+    m.zero_grad(set_to_none=True)
+    _, k, idx = selective_step(m, x, y, {**CFG, "sel_scale": "k"}, step=10**9)
+    got_k = [p.grad.clone() for p in m.parameters()]
+    for a, b in zip(got_k, _autograd_grads(m, x, y, idx, denom=k)):
+        assert torch.allclose(a, b, atol=1e-6)
+    m.zero_grad(set_to_none=True)
+    selective_step(m, x, y, CFG, step=10**9)                                  # default: divided by the batch size
+    got_B = [p.grad.clone() for p in m.parameters()]
+    for a, b in zip(got_B, _autograd_grads(m, x, y, idx, denom=B)):
+        assert torch.allclose(a, b, atol=1e-6)
+    for a, b in zip(got_k, got_B):                                            # the two differ exactly by the factor B / k
+        assert torch.allclose(a, b * (B / k), atol=1e-6)
+
+
+def test_sel_scale_has_no_effect_when_all_rows_are_kept_and_explicit_B_equals_the_default():
+    torch.manual_seed(0)
+    m = MeetNet(arm="selective")
+    x, y = _batch()
+    grads = {}
+    for name, cfg in [("default", CFG), ("B", {**CFG, "sel_scale": "B"}), ("k_full", {**CFG, "sel_scale": "k", "sel_frac": 1.0}),
+                      ("B_full", {**CFG, "sel_frac": 1.0})]:
+        m.zero_grad(set_to_none=True)
+        selective_step(m, x, y, cfg, step=10**9)
+        grads[name] = [p.grad.clone() for p in m.parameters()]
+    assert all(torch.equal(a, b) for a, b in zip(grads["default"], grads["B"]))
+    assert all(torch.equal(a, b) for a, b in zip(grads["k_full"], grads["B_full"]))
+
+
+def test_sel_scale_k_changes_the_run_but_not_its_flops():
+    cfg = {**CFG, "max_steps": 30, "eval_every": 10, "sel_warmup": 10, "sel_frac": 0.25}
+    a = run(cfg, device="cpu", data=_loaders())
+    b = run({**cfg, "sel_scale": "k"}, device="cpu", data=_loaders())
+    assert [r["flops"] for r in a] == [r["flops"] for r in b] and [r["k"] for r in a] == [r["k"] for r in b]
+    assert [r["task"] for r in a] != [r["task"] for r in b]                    # the training trajectory is different

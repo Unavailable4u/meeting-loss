@@ -60,3 +60,5 @@ Labels: **KEEP** (use as is), **CONTROL** (always include as a comparison), **VA
 Status 2026-10-27 (after D-025 and DR-014): the arms for the first four rows (and the rising-fraction arm) are implemented and tested; the headroom plan is fixed in `docs/notes/improve-headroom-plan.md`; none has been run, so every row stays OPEN.
 
 Status 2026-10-28 (after E-024): the first four rows of this section were run on 10 fresh seeds (exploratory); read the verdicts as leads. The best arms so far are S with a constant fraction of 0.1 to 0.2 and, as a lead to replicate, no warm-up; Selective-Backprop and both schedules lose under FLOPs.
+
+Status 2026-10-28 (look 2 built, not run): replication of the no-warm-up and fraction leads, the S15w0 and S10w0 combinations, a finer warm-up and a gradient-scale test are planned in `docs/notes/improve-look2-plan.md`; the rows for kept fraction and warm-up above stay leads until then.

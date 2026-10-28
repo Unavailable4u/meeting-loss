@@ -28,6 +28,7 @@ sel_mode: top                  # top (highest loss) | random (control: same size
 # sel_schedule: none           # none | osgd (kept fraction 1, 1/2, ..., 1/16 at 80/90/95/99.5% training accuracy) | linear
 # sel_frac_start: 0.1          # linear schedule: kept fraction after the warm-up ...
 # sel_frac_end: 0.5            # ... and at max_steps
+# sel_scale: B                 # B (kept rows' gradient divided by the batch size, default) | k (divided by the number of kept rows)
 # arm: sb                      # Selective-Backprop (src/sb.py); keys:
 # sb_beta: 2.0                 # selection power: kept share about 1/(beta+1)
 # sb_history: 1024             # number of recent losses the percentile is taken over
