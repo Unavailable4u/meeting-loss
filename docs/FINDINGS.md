@@ -192,3 +192,22 @@ Rules:
 - Scope: MNIST MLP, kept fractions 0.2 and 0.3, `sel_mode` top, warm-up 100, A1's hyperparameters, seeds 1300 to 1319, FLOPs only.
 - Implications: the kept fraction is a small lever (about 7% to 8% between 0.3 and 0.2), and the evidence favours a lower constant fraction over a schedule that starts high; the lowest fraction without a step penalty is unknown (F-018: S10 pays about 27% more steps at 0.97 on 3 seeds). The warm-up costs 11% to 12% of the FLOPs to 0.975 and has never been varied. This is a lead for a planned exploratory sweep, not a claim, and not a statement about Selective-Backprop.
 - Found / last re-verified: 2026-10-27
+
+## F-021: Selective-Backprop as released needed 44% to 84% more FLOPs than S30 and about as many as tuned A1 to reach 0.97 and 0.975, although it needed a third fewer updates (exploratory, 10 seeds)
+- Type: exploratory (pre-fixed plan; reading rule R4; same seeds across groups)
+- Status: tentative
+- Confidence: low to medium (10 paired seeds, intervals far from zero for the comparison with S30; hyperparameters inherited from A1; one MLP)
+- Evidence: E-024. Against S30 (FLOPs, 0.97 / 0.975): SB2 +44.4% [+31.6, +59.0] / +83.7% [+51.9, +120.3]; with the cached count +29.9% / +57.6%; SB2p100 +66.0% / +81.9%; SB3 +36.9% / +55.5%. Against A1: SB2 -7.1% / +18.8%, SB3 -11.9% / +0.6% (cached SB3 -19.0% / -10.6%). Updates to 0.975: 970, 775 and 790 against 1,425 for A1; cost per update of SB2 over the run 2.26 times A1's (1.88 cached; SB3 needs about 3.9 forward batches per update and costs more per update), matching the 2.33 / 1.89 predicted in `docs/notes/improve-reference-arms.md`.
+- Scope: MNIST MLP, A1's hyperparameters, beta 2 and 3, history 1,024, one-epoch or 100-step priming, seeds 2100 to 2109, FLOPs as counted by `src/flops.py` with every selection forward pass and the second forward pass charged; no wall-clock claim
+- Implications: in our FLOP accounting S's advantage over Selective-Backprop comes from skipping extra selection passes: S keeps the top rows of a batch it already ran forward, Selective-Backprop pays about two forward batches more per update. This is a lead for a pre-registered comparison (with a tuned Selective-Backprop, since it may prefer other hyperparameters), not a claim, and not a statement about GPUs or deep image models where the paper measures time.
+- Found / last re-verified: 2026-10-28
+
+## F-022: Constant kept fractions of 0.1 to 0.2 were 6% to 13% cheaper than 0.3, selecting from the first update was the cheapest of 14 arms, and both schedules were worse than a constant fraction (exploratory, 10 seeds)
+- Type: exploratory (pre-fixed plan; rules R1, R2, R3, R5; the per-seed counts and curves are extra looks)
+- Status: tentative
+- Confidence: low to medium for the fraction result (it agrees with E-023); low for the warm-up result (best of 14 arms, not graded in the warm-up length, mechanism unknown)
+- Evidence: E-024. FLOPs against S30 (0.97 / 0.975): S25 -7.4% / -2.2%, S20 -6.0% / -10.9%, S15 -9.6% [-15.5, -3.0] / -12.9% [-17.2, -8.9], S10 -6.0% / -13.4%, with a step penalty at 0.1. S20 without warm-up: -22.7% [-27.3, -18.0] / -23.9% [-30.8, -16.3] against S30 and -50.3% / -50.8% against A1, cheaper than S20 in 10 of 10 seeds, 1,260 steps to 0.975 against 1,395; warm-up 25 and 50 not clearly different from 100. Ordered-SGD rule (SOSGD) +12.7% / +2.7% against S30; rising fraction (Sup) +6.8% / +9.3% against S15; gradient-norm ranking -1.9% / +2.0% against S20 (unclear).
+- Scope: MNIST MLP, A1's hyperparameters, `sel_mode` top, seeds 2100 to 2109, FLOPs only
+- Implications: leads for look 2 and for `prereg-v3`, not claims: a constant fraction between 0.1 and 0.2 and selection from the first update. The high-then-low schedule of Ordered SGD and the rising schedule of Loshchilov and Hutter are not supported under FLOPs here. The warm-up effect must be replicated on new seeds and decomposed (a finer warm-up, the gradient scale) before it is explained.
+- Found / last re-verified: 2026-10-28
+
