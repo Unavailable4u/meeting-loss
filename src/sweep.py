@@ -84,6 +84,14 @@ SWEEP_ARMS["base_b48"] = ("base", {"batch_size": 48, "eval_every": 125}, {})
 SWEEP_ARMS["selective30"] = ("selective", {"sel_frac": 0.3, "sel_warmup": 100, "sel_mode": "top"}, {})
 ARM_STEPS = {"base_b48": 8000}  # protocol horizon per sweep arm; every other arm uses SWEEP_STEPS
 
+# Improve track (D-025, DR-016). t11: Selective-Backprop as released (src/sb.py) with beta 2, history 1,024 and one-epoch priming
+# fixed and the same four-dimensional search space as arm A (lr, wd, act, lr_schedule), 25 trials, 2 selection seeds; the score is
+# the FLOPs to 0.975 as counted for the released algorithm (`flops`: every selection forward pass and the second forward pass
+# charged). beta is not searched: it is the method's own knob and E-024 found beta 2 and 3 alike. t12 (optional, descriptive): S
+# with kept 0.2 and no warm-up, the same search space, tuned once as S30 was in t10.
+SWEEP_ARMS["sb"] = ("sb", {"sb_beta": 2.0, "sb_history": 1024}, {})
+SWEEP_ARMS["selective20w0"] = ("selective", {"sel_frac": 0.2, "sel_warmup": 0, "sel_mode": "top"}, {})
+
 
 def expected_steps(arms):
     """Protocol horizon of a sweep over `arms`. Arms with different horizons need separate tags."""
