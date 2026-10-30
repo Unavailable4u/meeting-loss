@@ -1,0 +1,30 @@
+# prereg-v3 plan (decision D-026, DR-017): the confirmatory test of selection without a warm-up (S20w0).
+# Read by scripts/run_final.py (--plan configs/prereg_v3_plan.yaml) and scripts/analyze_prereg3.py.
+# LOCKED by the tag prereg-v3 (to be created by the researcher on the lock commit): the lock commit adds H8, H9 and H10 to
+# docs/HYPOTHESES.md and the v1.3 additions to docs/METHOD.md, and carries this tag. After it a change to the plan, configs/prereg_v3,
+# configs/tuned, src, docs/HYPOTHESES.md or docs/METHOD.md is post-hoc and needs a drift entry (run_final.py checks this against the tag).
+# Seeds 2300 to 2319 in every group (paired); 2320 to 2399 stay unused and are not added after any result.
+# Roles: reference = A1 (H8 reference); primary = S20w0 (H8, H9, H10); control = S30 (H9 reference) and SBT (H10 reference, the tuned
+# Selective-Backprop of tag t11); shift = the further tunings of A whose paired change against A1 defines the re-tuning shift of H8;
+# descriptive = reported, never decide a claim. The mapping hypothesis -> reference group is fixed by name in src/prereg3.py.
+horizon_steps: 3000
+seed_block: "2300-2319"
+out_dir: results/raw/prereg_v3
+lock_tag: prereg-v3
+locked_paths: [configs/prereg_v3_plan.yaml, configs/prereg_v3, configs/tuned, src, docs/HYPOTHESES.md, docs/METHOD.md]
+# max_gain, as in H7a: the largest improvement of any of A2, A5 to A8 over A1 on these seeds (0 if none is better). Applies to H8 only.
+shift_rule: max_gain
+groups:
+  - {name: A1,    config: configs/tuned/t1_base_two.yaml,        seeds: "2300-2319", role: reference,   note: "arm A, t1 tuning: reference of H8"}
+  - {name: S20w0, config: configs/prereg_v3/S20w0.yaml,          seeds: "2300-2319", role: primary,     note: "selective backward, sel_frac 0.2, no warm-up, A1's hyperparameters: H8, H9, H10"}
+  - {name: S30,   config: configs/prereg_v3/S30.yaml,            seeds: "2300-2319", role: control,     note: "selective backward, sel_frac 0.3, warm-up 100 (the arm of H7a): reference of H9"}
+  - {name: SBT,   config: configs/tuned/t11_sb_two.yaml,         seeds: "2300-2319", role: control,     note: "Selective-Backprop as released (beta 2), tuned in tag t11 (E-026): reference of H10, uncached count decisive"}
+  - {name: A2,    config: configs/tuned/t2_base_two.yaml,        seeds: "2300-2319", role: shift,       note: "arm A, second tuning"}
+  - {name: A5,    config: configs/tuned/t5_base_two.yaml,        seeds: "2300-2319", role: shift,       note: "arm A, tuning t5"}
+  - {name: A6,    config: configs/tuned/t6_base_two.yaml,        seeds: "2300-2319", role: shift,       note: "arm A, tuning t6"}
+  - {name: A7,    config: configs/tuned/t7_base_two.yaml,        seeds: "2300-2319", role: shift,       note: "arm A, tuning t7"}
+  - {name: A8,    config: configs/tuned/t8_base_two.yaml,        seeds: "2300-2319", role: shift,       note: "arm A, tuning t8"}
+  - {name: S20,   config: configs/prereg_v3/S20.yaml,            seeds: "2300-2319", role: descriptive, note: "selective backward, sel_frac 0.2, warm-up 100: splits H9 into its two changes"}
+  - {name: S15,   config: configs/prereg_v3/S15.yaml,            seeds: "2300-2319", role: descriptive, note: "selective backward, sel_frac 0.15, warm-up 100"}
+  - {name: S20w10, config: configs/prereg_v3/S20w10.yaml,        seeds: "2300-2319", role: descriptive, note: "selective backward, sel_frac 0.2, warm-up 10"}
+  - {name: R20w0, config: configs/prereg_v3/R20w0.yaml,          seeds: "2300-2319", role: descriptive, note: "random control: 20% of the rows at random, no warm-up"}

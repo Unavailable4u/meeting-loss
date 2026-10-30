@@ -37,3 +37,6 @@
 
 ## Update 2026-10-30 (t11 done; the proposal itself is unchanged and nothing in it is decided)
 The tuned Selective-Backprop exists: `configs/tuned/t11_sb_two.yaml` (trial 21, relu, cosine, lr 0.00143, wd 1.71e-06; E-026). At selection it cost 209.9 GFLOPs uncached and 182.7 cached to reach 0.975, against about 108 for S20w0 in looks 1 and 2, so the expectation for H10 is about -48% uncached and -41% cached, far from the 15% margin (an expectation from in-sample numbers, which flatter Selective-Backprop; not a result). The OPEN item 1 therefore no longer turns on whether SBT exists, only on whether H10 should be a hypothesis or a descriptive group. Item 5 (t12) stays at the default: not run.
+
+## Update 2026-10-30 (adopted)
+The researcher answered "ok, let's do next" and the six defaults were taken as accepted: D-026 records them. One addition by the assistant: three confirmatory hypotheses share the error budget, so the intervals use alpha 0.05 / 3 (98.33%) instead of 97.5% (D-026 point 6). The cost estimate of "about 3 hours" above was too low; the plan note gives 4 to 4.5 hours. The plan, configs, analysis and tests are in `docs/notes/prereg-v3-plan.md`.

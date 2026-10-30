@@ -46,3 +46,8 @@ prereg-v2 (D-023, DR-011; plan and order in `docs/notes/prereg-v2-plan.md`):
 - `run_final.py --plan configs/prereg_v2_plan.yaml`: lock tag, output directory (`results/raw/prereg_v2`) and locked paths come from the plan; `--dry-run` names configs that do not exist yet.
 - `make_prereg2_configs.py`: writes `configs/prereg_v2/{S30,S20,R30}.yaml` (A1 plus the selective keys).
 - `analyze_prereg2.py`: the pre-registered analysis (H7a, H7b, re-tuning shift, noise floor, descriptive groups) from the plan; refuses incomplete groups; `--shift-rule` shows another rule descriptively.
+
+prereg-v3 (D-026, DR-017; plan and order in `docs/notes/prereg-v3-plan.md`):
+- `run_final.py --plan configs/prereg_v3_plan.yaml`: 13 groups, 260 runs, lock tag `prereg-v3`, logs in `results/raw/prereg_v3`.
+- `make_prereg3_configs.py`: writes `configs/prereg_v3/{S20w0,S30,S20,S15,S20w10,R20w0}.yaml` (A1 plus the selective keys).
+- `analyze_prereg3.py`: the pre-registered analysis (H8, H9, H10, re-tuning shift, noise floor, secondary readings, descriptive groups, run-header provenance); refuses incomplete groups; `--shift-rule` shows another rule descriptively.
