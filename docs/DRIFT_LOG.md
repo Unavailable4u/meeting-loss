@@ -136,4 +136,4 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: D-024 (rules for `src/` changes), D-025
 - Docs updated: [x] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS  [ ] LITERATURE  [ ] DECISIONS  [ ] RISKS  [ ] CLAIMS  [x] notes (`improve-sb-tuning.md`, `prereg-v3-proposal.md`)
 - Experiments invalidated or needing rerun: none. Evidence that existing behaviour is unchanged: the sampled trials (three tags) and one built config of every pre-existing sweep arm, and the protocol horizons, are identical before and after the change, compared exactly; the new tests (`tests/test_sweep_sb.py`) pin the two registry entries, 25 reproducible trials over arm A's four dimensions, the trial config, and that a job of the new arm writes a log whose score is the uncached FLOPs. `src/sweep.py` is not imported by `run`, so the training path (E-011) is not touched and no new regression run is needed.
-
+- Update 2026-10-30: the `sb` sweep (t11) was run on this code (all 50 headers a540829b, `git_dirty` false) and its winner was selected as pre-registered in the protocol note (E-026). `selective20w0` (t12) was not run.
