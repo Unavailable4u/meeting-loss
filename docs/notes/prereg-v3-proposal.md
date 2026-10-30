@@ -34,3 +34,6 @@
 
 ## What has to be built before the lock (none of it touches `src/` beyond DR-014 to DR-016)
 `configs/prereg_v3_plan.yaml` and `configs/prereg_v3/*.yaml`; `scripts/analyze_prereg3.py` (H8 to H10, the shift, the noise floor, the descriptive groups, a refusal on incomplete groups, like `analyze_prereg2.py`); tests; the lock commit (H8 to H10 in `docs/HYPOTHESES.md`, the arms in `docs/METHOD.md`, a drift entry); the tag `prereg-v3`. Order: t11 (tuning) -> build -> lock -> run -> analyse. The tag also freezes `src/`, `configs/tuned/`, the plan and the hypotheses; nothing about the arms may change after it.
+
+## Update 2026-10-30 (t11 done; the proposal itself is unchanged and nothing in it is decided)
+The tuned Selective-Backprop exists: `configs/tuned/t11_sb_two.yaml` (trial 21, relu, cosine, lr 0.00143, wd 1.71e-06; E-026). At selection it cost 209.9 GFLOPs uncached and 182.7 cached to reach 0.975, against about 108 for S20w0 in looks 1 and 2, so the expectation for H10 is about -48% uncached and -41% cached, far from the 15% margin (an expectation from in-sample numbers, which flatter Selective-Backprop; not a result). The OPEN item 1 therefore no longer turns on whether SBT exists, only on whether H10 should be a hypothesis or a descriptive group. Item 5 (t12) stays at the default: not run.
