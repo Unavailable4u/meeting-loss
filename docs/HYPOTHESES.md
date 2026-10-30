@@ -101,8 +101,8 @@ Reported with means, intervals and paired differences, never used to decide a cl
 - **Metrics and rule:** as H7a (D-019): FLOPs-to-target (decisive) and steps-to-target (reported) at 0.97 and 0.975, a target reached at the first of two consecutive evaluations at or above it (D-018), FLOPs as counted by `src/flops.py`, 20 paired seeds (2300 to 2319), 3,000 steps. *Supported* if, at both targets, the paired change in mean FLOPs-to-target is at most -15% and its paired-bootstrap interval excludes zero **and** the gain exceeds the re-tuning shift of A; *refuted* if, at both targets, the interval excludes a gain of 15% or more (lower bound above -15%); *inconclusive* otherwise, including when the two targets disagree. **Interval:** three confirmatory comparisons (H8, H9, H10) share the error budget of 0.05, as D-019 did for two, so each interval has alpha = 0.05 / 3 (a 98.33% percentile interval, 10,000 resamples, seed 0; `src/prereg3.py`, `scripts/analyze_prereg3.py`).
 - **Re-tuning shift (rule `max_gain`, as H7a; `configs/prereg_v3_plan.yaml`):** at each target the largest reduction in mean FLOPs-to-target against A1 on these 20 seeds achieved by any of A2 (`t2`), A5, A6, A7, A8 (`t5` to `t8`), taken from their paired changes (0 if none is below A1); the gain of S20w0 must exceed it. The five tunings are re-run on the new seeds; shifts measured on other seeds are not comparable (F-011). The shift applies to H8 only: S30 and the tuned Selective-Backprop are fixed references, not re-tunings of A.
 - **Expectation recorded before the runs:** a supported verdict is expected, with a gain near 49% to 51% (pooled over the exploratory seeds; against A1 the two looks agreed, -50.3% / -50.8% and -47.1% / -51.0%, while the gain against S20 shrank by about a fifth between them); the shift in `prereg-v2` was 5.5% and 3.9%, and a shift near the gain is not expected. About half of the saving against S20 is arithmetic (the 100 full steps of the warm-up cost 6.87 GFLOPs more than 100 selective steps, E-025), which is a real FLOP saving and counts here.
-- **Status:** open
-- **Linked findings:** F-021 to F-024 (exploratory context); E-024, E-025, E-026
+- **Status:** supported (E-027: -48.5% [-52.1, -44.2] at 0.97 and -48.8% [-53.4, -43.8] at 0.975, shift 2.1% and 4.0%, 20 of 20 seeds; F-025; DR-018)
+- **Linked findings:** F-021 to F-024 (exploratory context); E-024, E-025, E-026; F-025 and E-027 (confirmatory result), F-026
 - **Paper sections:** to be assigned
 
 ## H9 (generated from F-022, F-023): S20w0 saves FLOPs also against the arm confirmed in `prereg-v2`
@@ -111,8 +111,8 @@ Reported with means, intervals and paired differences, never used to decide a cl
 - **Statement:** On the same 20 seeds, S20w0 needs fewer FLOPs than S30 (`sel_frac` 0.3, `sel_mode` top, `sel_warmup` 100, A1's hyperparameters, `configs/prereg_v3/S30.yaml`: the arm of H7a).
 - **Metrics and rule:** as H8 with a margin of **10%** and **no re-tuning shift**. *Supported* if, at both targets, the paired change is at most -10% and the interval excludes zero; *refuted* if, at both targets, the interval's lower bound is above -10%; *inconclusive* otherwise.
 - **Limits stated in advance:** S20w0 differs from S30 in two settings at once (kept fraction 0.2 against 0.3, and no warm-up against 100 steps); H9 tests the combination and does not say which part produces the saving. The groups S20 (0.2 with warm-up 100) and S20w10 split it descriptively, and the report gives the FLOPs with the warm-up steps charged like selective steps (secondary). The sizes of the two parts in the exploratory looks were about 8% to 10% (fraction, against S30) and 13% to 16% (warm-up, against S20), of which about 6.87 GFLOPs of the second is the saved cost of full steps.
-- **Status:** open
-- **Linked findings:** F-020, F-022, F-023, F-024 (exploratory context); F-019 (S30 against A1, confirmatory)
+- **Status:** supported (E-027: -22.2% [-29.1, -14.7] at 0.97 and -19.1% [-26.1, -11.7] at 0.975, 19 and 18 of 20 seeds; F-025; DR-018)
+- **Linked findings:** F-020, F-022, F-023, F-024 (exploratory context); F-019 (S30 against A1, confirmatory); F-025 and E-027 (confirmatory result), F-026
 - **Paper sections:** to be assigned
 
 ## H10 (generated from F-021, E-026): S20w0 saves FLOPs also against Selective-Backprop tuned in the baseline's own protocol
@@ -122,8 +122,8 @@ Reported with means, intervals and paired differences, never used to decide a cl
 - **Metrics and rule:** as H8 with a margin of **15%** and **no re-tuning shift**, on the **uncached** FLOP count (every selection forward pass and the second forward pass charged: the released algorithm, D-025); steps (updates) and the cached count (only the backward part of an update charged) are reported next to it and decide nothing.
 - **Limits stated in advance:** FLOPs only, not wall-clock time: the published gains of Selective-Backprop are wall-clock gains on deeper image models, and this MLP is small, so H10 says nothing about a GPU or an image network. SBT was tuned in its own tag on two selection seeds, while S20w0 inherits A1's hyperparameters (conservative for S20w0); beta, the history length and the priming length were not searched. The top-k rule of S is not new (Ordered SGD, online hard example mining, `docs/LITERATURE.md`); H10 is a controlled FLOP comparison, not a claim of a new method.
 - **Expectation recorded before the runs:** a supported verdict is expected: if SBT costs on the final seeds about what it did at selection (209.9 GFLOPs uncached to 0.975, 182.7 cached) and S20w0 about 108, S20w0 would be about 48% below it on the uncached count and about 41% below on the cached count; in-sample scores flatter SBT, so the gap is more likely to be larger than smaller.
-- **Status:** open
-- **Linked findings:** F-021 (exploratory context); E-024, E-026
+- **Status:** supported (E-027: -46.5% [-52.3, -40.3] at 0.97 and -53.6% [-58.3, -48.2] at 0.975 on the uncached count, 20 of 20 seeds; cached -40.5% and -46.1%; F-025; DR-018)
+- **Linked findings:** F-021 (exploratory context); E-024, E-026; F-025 and E-027 (confirmatory result), F-026
 - **Paper sections:** to be assigned
 
 ## Roles of the groups of `prereg-v3` (D-026, `configs/prereg_v3_plan.yaml`)
