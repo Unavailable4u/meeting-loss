@@ -1,0 +1,132 @@
+\chapter{Methods}\label{ch:methods}
+
+This chapter defines the network, the meeting loss and its controls, the selective backward pass, the Selective-Backprop reference arm, and the exact cost of every training step. The experimental protocol (tuning, targets, statistics) follows in \cref{ch:protocol}.
+
+\section{Network and training setting}\label{sec:setting}
+All experiments use one multilayer perceptron for MNIST \citep{lecun1998gradient}, written as the composition of a lower part $\Flow$ and an upper part $\Fup$:
+\begin{align}
+h &= \Flow(x) = W_2\,\sigma(W_1 x + c_1) + c_2 \in\R^{128}, \\
+z &= \Fup(h) = W_4\,\sigma(W_3\,\sigma(h) + c_3) + c_4 \in\R^{10}, \qquad p=\mathrm{softmax}(z),
+\end{align}
+with layer sizes $784\to256\to128\to256\to10$ (269\,450 parameters) and an activation $\sigma$ that is either ReLU or $\tanh$, chosen per arm by hyper-parameter search. The middle state $h$ is the representation at which the auxiliary losses of Study~1 act. The task loss is the cross-entropy $\Ltask=\mathrm{CE}(z,y)$ averaged over the batch.
+
+Training uses AdamW \citep{kingma2015adam,loshchilov2019decoupled}, batch size 128, and at most 3\,000 updates (about 7 epochs), with either a constant or a cosine-decay learning rate \citep{loshchilov2017sgdr}. MNIST is split once and for all, with a fixed random seed, into 55\,000 training and 5\,000 validation images; inputs are normalised with the usual mean and standard deviation. Every run is identified by its seed, which controls the initialisation and the order of the training batches. The test set is never used. Models are implemented in PyTorch \citep{paszke2019pytorch}.
+
+\section{The meeting loss (arm D)}\label{sec:meeting}
+\Cref{fig:meeting} shows the architecture. A second, small network $G$ maps the output space back to the space of the middle state: $G:\R^{10}\to\R^{128}$ with one hidden layer of 256 units. It is trained, by its own loss, to reconstruct the middle state from the (detached) class probabilities,
+\begin{equation}
+\Linv = \big\|G(p)-\mathrm{sg}(h)\big\|^2 ,\qquad p=\mathrm{softmax}(\mathrm{sg}(z)),
+\end{equation}
+where $\mathrm{sg}$ denotes stop-gradient. This makes $G$ an approximate inverse of $\Fup$ along the data distribution. With the label $y$ encoded as a one-hot vector $\onehot$, the \emph{difference-corrected target} for the middle state is
+\begin{equation}
+b \;=\; \mathrm{sg}(h) + G(\onehot) - G(p).
+\end{equation}
+It is the target of simplified difference target propagation \citep{bartunov2018assessing}, in the form of the DTP target of \citet{lee2015dtp} applied at a middle layer, where $G$ inverts the whole upper half of the network. The \emph{meeting loss} pulls the middle state towards this target,
+\begin{equation}
+\Lmeet = \big\|h - b\big\|^2 ,
+\end{equation}
+and the total loss of arm D is
+\begin{equation}
+\mathcal{L} = \Ltask + \lambda_{\mathrm{inv}}\,\Linv + \lambda_{\mathrm{meet}}\,r(t)\,\Lmeet,\qquad r(t)=\min\!\big(1,\, t/T_{\mathrm{w}}\big),
+\end{equation}
+with a linear ramp $r(t)$ over $T_{\mathrm{w}}$ warm-up steps. The losses train different parameters: $\Ltask$ trains $\Flow$ and $\Fup$ (ordinary backpropagation), $\Linv$ trains only $G$, and $\Lmeet$ sends gradient only to $\Flow$ through $h$, because $b$ is a constant. Because $b$ is detached, the gradient of $\Lmeet$ with respect to $h$ is (up to the mean reduction over batch and dimension) $-2\,(G(\onehot)-G(p))$. For $G$ differentiable and $p$ close to $\onehot$ this equals, to first order, $-2\,J_G\,(\onehot-p)$: the output error $(\onehot-p)$ is carried back through $G$'s Jacobian, whereas backpropagation carries the same output error through $\Fup$'s Jacobian transpose. When the examples are classified confidently ($p\approx\onehot$) the direction vanishes, which is why the signal lives on the high-loss rows (\cref{sec:concentration}).
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/tikz_meeting}}
+\caption{Arm D. The network (blue) is trained by backpropagation on $\Ltask$. The backward network $G$ (orange) maps class probabilities $p$ and the one-hot label $\onehot$ to the middle-state space; the target $b$ is the current middle state corrected by the difference $G(\onehot)-G(p)$. The meeting loss $\Lmeet$ sends gradient only into $\Flow$. Dashed grey arrows are stop-gradient connections.}
+\label{fig:meeting}
+\end{figure}
+
+\section{Arms and controls of Study 1}\label{sec:arms}
+Auxiliary losses can help for reasons that have nothing to do with the target-propagation idea: they can act as extra regularisation, as extra learning-rate on the lower layers, or simply as a second supervised signal. The study therefore includes controls that isolate these explanations (\cref{tab:arms}). The comparison that matters is always against arm~A, the plain network with its own tuned hyper-parameters, and against the same-cost control B.
+
+\begin{table}[t]
+\centering\small
+\caption{Arms of Study 1. All arms are trained with the same optimiser, batch size and horizon; each has its own tuned learning rate, weight decay, schedule and activation (\cref{sec:tuning}).}
+\label{tab:arms}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+Arm & Role & Definition\\
+\midrule
+A & reference & Plain network, no auxiliary loss.\\
+D & \textbf{tested} & Meeting loss with the default configuration of \cref{sec:meeting}.\\
+B & control & Deep supervision: a linear classifier on $h$ with its own cross-entropy; weight decays linearly to zero over training (the form of \citealt{lee2015deeply}).\\
+B-code & control & As B, with a constant weight and a decaying learning rate of the companion head, as in the reference code of that paper.\\
+C & control & Autoencoder auxiliary: a decoder reconstructs the input from $h$.\\
+E & control & Arm A with a learning-rate multiplier on $\Flow$ (tests whether the meeting loss merely acts as a larger effective step on the lower layers).\\
+F & control & Exact-gradient target $b=\mathrm{sg}(h-\hat\eta\,\partial\Ltask/\partial h)$ in place of the learned inverse.\\
+V1 & variant of D & Noise in the inverse loss, as in DTP and SDTP: $G$ is trained on corrupted middle states.\\
+V2 & variant of D & Augmented output: $G$ also receives a fixed random projection of $h$ \citep{bartunov2018assessing}.\\
+V3 & variant of D & Frozen random $G$ with no inverse loss; behaves like direct feedback alignment \citep{nokland2016direct}, and is inspired by fixed-weight DTP \citep{shibuya2023fixed}.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{The selective backward pass (arm S)}\label{sec:selective}
+The second idea changes only how the backward pass is run. For each batch of $B$ rows the forward pass is run on \emph{all} rows, which gives every row's loss for free. A fraction $\phi$ of the rows with the highest loss is kept, $k=\lceil\phi B\rceil$, and the backward pass runs only through these $k$ rows (\cref{alg:selective}, \cref{fig:selective}). The gradient used for the update is the sum of the kept rows' gradients divided by the \emph{full} batch size $B$, so the update equals the full-batch gradient minus the contribution of the omitted rows. The optimiser and its hyper-parameters are those of arm A. The backward pass is written by hand for the plain MLP, reuses the stored forward activations, and the repository contains a unit test that compares it with automatic differentiation on the kept rows. During the first $T_{\mathrm{w}}$ updates (the \emph{warm-up}) the full backward pass is used; the default is 100 steps, and variant names carry the choice (S30 = $\phi{=}0.3$, warm-up 100; S20w0 = $\phi{=}0.2$, no warm-up). A control, R, keeps the same number of rows chosen \emph{at random}.
+
+\begin{algorithm}[t]
+\caption{One update of the selective backward pass (arm S)}\label{alg:selective}
+\DontPrintSemicolon
+\KwIn{batch $(X,Y)$ of $B$ rows, kept fraction $\phi$, warm-up $T_{\mathrm w}$, step $t$}
+\KwOut{update of the parameters $\theta$}
+$Z \leftarrow \text{forward}(X)$ \tcp*{all $B$ rows; stores the activations}
+$\ell_i \leftarrow \mathrm{CE}(Z_i, Y_i)$ for $i=1,\dots,B$\;
+\eIf{$t< T_{\mathrm w}$}{ $S\leftarrow\{1,\dots,B\}$ }{ $k\leftarrow\lceil \phi B\rceil$;\quad $S\leftarrow$ indices of the $k$ largest $\ell_i$ }
+$g \leftarrow \tfrac1B \sum_{i\in S}\nabla_\theta\, \ell_i$ \tcp*{hand-written backward on rows in $S$ only}
+$\theta \leftarrow \mathrm{AdamW}(\theta, g)$\;
+\end{algorithm}
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/tikz_selective}}
+\caption{One step of arm S. All rows are forwarded; the rows with the largest loss are kept; only they are back-propagated.}
+\label{fig:selective}
+\end{figure}
+
+\section{Selective-Backprop as a reference arm}\label{sec:sb}
+To test the selective pass against a published method and not only against a plain baseline, the thesis includes a reimplementation of Selective-Backprop \citep{jiang2019selective} that follows the released code. Each incoming batch is forwarded and each row's loss enters a history of the last 1\,024 losses. A row is kept, independently, with probability equal to the share of history entries strictly below its loss, raised to the power $\beta$ (here $\beta=2$, the value fixed in advance; with uniform percentiles the expected kept share is $1/(\beta+1)$). Kept rows wait in a queue, and as soon as the queue holds 128 rows an update is made on them. The first epoch is an ordinary training epoch (priming). The released code runs a second forward pass on the kept rows, and so does this reimplementation. The cost therefore has two parts: one forward pass for every incoming batch (selection) and one full ordinary step for every update. This count, called \emph{uncached}, is the primary one; a \emph{cached} count that charges only the backward part of an update, as an implementation that reuses the selection pass would, is reported next to it. This arm was tuned once (25 trials of the same search as for every other arm), with $\beta$, history length and priming fixed in advance.
+
+\section{The cost of a step}\label{sec:cost-model}
+Cost is the number of FLOPs of the matrix multiplications of the forward and backward passes, with a multiply--add counted as two operations (\cref{sec:flops}). For the network of \cref{sec:setting} and a batch of $B=128$ rows:
+\begin{itemize}
+\item forward pass: $F=2B\sum_\ell n^\ell_{\mathrm{in}}n^\ell_{\mathrm{out}} = 68\,812\,800$;
+\item weight gradients: $W=68\,812\,800$;
+\item gradients with respect to layer inputs (not needed for the first layer): $X=17\,432\,576$.
+\end{itemize}
+A full step of arm A costs $F+W+X=155\,058\,176$ FLOPs, of which the forward pass is $44.4\%$. A selective step that keeps $k$ rows costs
+\begin{equation}
+C(k) \;=\; F + \frac{k}{B}\,(W+X),
+\end{equation}
+which is $95.1$ MFLOPs for $\phi=0.3$ ($k=39$, $0.613$ of a full step) and $86.3$ MFLOPs for $\phi=0.2$ ($k=26$, $0.557$ of a full step); see \cref{fig:cost}. Because the forward pass cannot be skipped, the cost of a step cannot fall below $0.444$ of a full step however few rows are kept.
+
+\begin{figure}[t]
+\centering
+\input{figures/tikz_cost}
+\caption{FLOPs of one step (MFLOPs, batch 128) for the full backward pass and for the selective pass with $30\%$ and $20\%$ of the rows kept. The forward pass over all rows is a fixed cost; only the backward part shrinks. Numbers in brackets: cost relative to a full step.}
+\label{fig:cost}
+\end{figure}
+
+The auxiliary losses of Study~1 add their own forward and backward work. \Cref{tab:overhead} lists the exact overhead of every arm, and \cref{fig:overhead} shows what it implies. An arm with an overhead of $o$ must reduce the number of steps to the target by more than $1-1/(1+o)$ to save FLOPs at all (its \emph{break-even}). For the meeting loss ($+22.9\%$) the break-even is $18.6\%$ fewer steps; the cheapest variant (V3) needs $10.5\%$, and the autoencoder auxiliary needs more than half.
+
+\begin{table}[t]
+\centering\small
+\caption{Exact FLOPs per training step (batch 128) and break-even step reduction of the arms of Study 1. Computed with the repository's FLOP counter and checked against the analytic count.}
+\label{tab:overhead}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+Arm & FLOPs per step & Overhead vs.\ A (\%) & Break-even (\% fewer steps)\\
+\midrule
+\input{tables/tab_overhead}\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{fig_overhead}
+\caption{Overhead of the Study 1 arms and the fraction of steps they must save to break even. Orange: variants of the meeting loss; blue: auxiliary-loss controls.}
+\label{fig:overhead}
+\end{figure}

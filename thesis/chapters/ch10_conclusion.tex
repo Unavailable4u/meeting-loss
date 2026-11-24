@@ -1,0 +1,24 @@
+\chapter{Conclusion and Future Work}\label{ch:conclusion}
+
+\section{Conclusion}
+This thesis tested two ideas for cheaper training of a small neural network under one strict protocol: counted FLOPs to a fixed validation accuracy, equal tuning of every arm, paired seeds, and hypotheses locked before the confirmatory runs.
+
+The first idea, an auxiliary meeting loss derived from simple difference target propagation, did not save compute. It was refuted by a pre-registered test ($+36.9\%$ and $+35.5\%$ more FLOPs than a tuned baseline), and a set of controls, variants and mechanism checks showed that the result is not an artefact of one detail: the signal is well aligned with the gradient, and giving it more strength did not help. The evidence is consistent with a redundancy explanation.
+
+The second idea, back-propagating only through the highest-loss rows of each batch, did save compute. In a second pre-registered test it needed $35.1\%$ and $38.4\%$ fewer FLOPs than the tuned baseline and $30.2\%$ and $35.5\%$ fewer than a tuned small-batch baseline, in all 20 seeds. In a third, a leaner variant (keep $20\%$, no warm-up) needed $48.5\%$ and $48.8\%$ fewer FLOPs than the baseline and $46.5\%$ and $53.6\%$ fewer than a tuned Selective-Backprop reimplementation, whose cost is dominated by extra selection passes.
+
+The protocol itself produced two lessons: tuning on two seeds is unreliable (two tunings of the same baseline tied at selection and differed by up to $34\%$ on fresh seeds), and counted FLOPs, optimiser updates and time per step can rank methods differently. Everything is limited to one MLP on MNIST and to counted FLOPs.
+
+\section{Future work}\label{sec:future}
+In the order in which they would most increase the weight of the results:
+\begin{enumerate}
+\item \textbf{A second setting}: a second dataset (Fashion-MNIST) and a small convolutional network, each with its own tuned baseline and a new pre-registered plan, repeating the three confirmatory comparisons. This requires a selective backward pass for layers other than plain linear ones (for example through autograd hooks on the kept rows).
+\item \textbf{Wall-clock time to target} for A1, S30, S20w0 and Selective-Backprop on CPU and GPU, several widths and thread counts, with the full time-to-target measured and not derived. Without it, ``saves compute'' means FLOPs only.
+\item \textbf{A completed related-work check}: the literature review of \cref{ch:background} covers the closest methods, but a systematic search (including for earlier selective-backward and top-$k$-loss variants, and for auxiliary target-propagation signals) should be completed and the bibliography verified entry by entry (\cref{app:reproducibility}).
+\item \textbf{The planned mechanism checks for the meeting loss}: oracle targets, a replacement test with backpropagation cut, and a deeper network with SGD and momentum; and a bounded or normalised meeting term to address the instability seen with ReLU.
+\item \textbf{The effect of removing the warm-up}: a mechanism is not known; optimiser-state and early-ranking explanations should be separated by dedicated experiments.
+\item \textbf{Selective-Backprop}: search over $\beta$, history length and priming; an implementation that caches the selection forward pass; a cost model with time and not only FLOPs.
+\item \textbf{More reliable tuning}: re-evaluating the top trials on fresh seeds before selection, and a larger number of tunings for every arm and not only for the baseline.
+\end{enumerate}
+
+\paragraph{From thesis to paper.} The material divides naturally into a focused paper, with the selective backward pass (Studies~2 and 3) as its main contribution and the meeting-loss negative result as a short motivating section, and the protocol and its lessons as a methodological contribution. The paper would need items 1--3 above. A workshop version could be written with the current evidence if the limitations of \cref{sec:limitations} are stated prominently.

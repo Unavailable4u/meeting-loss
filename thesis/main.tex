@@ -1,0 +1,46 @@
+% =============================================================================================
+%  MSc/BSc thesis:  Which Ideas Actually Save Compute?
+%  Build:  latexmk -pdf main.tex        (needs: pdflatex, bibtex; all packages are standard TeX Live)
+%  Edit your name, degree, university and supervisor in  metadata.tex
+% =============================================================================================
+\documentclass[12pt,a4paper,twoside,openright]{report}
+\input{metadata}
+\input{preamble}
+\hypersetup{pdftitle={\thesistitle},pdfauthor={\thesisauthor}}
+
+\begin{document}
+\pagenumbering{roman}
+\input{frontmatter/titlepage}
+\input{frontmatter/declaration}
+\input{frontmatter/abstract}
+\input{frontmatter/acknowledgements}
+\tableofcontents
+\listoffigures
+\listoftables
+\input{frontmatter/notation}
+
+\clearpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\input{chapters/ch01_introduction}
+\input{chapters/ch02_background}
+\input{chapters/ch03_methods}
+\input{chapters/ch04_protocol}
+\input{chapters/ch05_study1}
+\input{chapters/ch06_mechanism}
+\input{chapters/ch07_study2}
+\input{chapters/ch08_study3}
+\input{chapters/ch09_discussion}
+\input{chapters/ch10_conclusion}
+
+\appendix
+\input{appendices/appA_reproducibility}
+\input{appendices/appB_hyperparameters}
+\input{appendices/appC_hypotheses}
+\input{appendices/appD_exploratory}
+\input{appendices/appE_deviations}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+\addcontentsline{toc}{chapter}{Bibliography}
+\end{document}
