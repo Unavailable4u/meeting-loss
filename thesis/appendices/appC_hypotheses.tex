@@ -1,0 +1,18 @@
+\chapter{Hypothesis Register}\label{app:hypotheses}
+\Cref{tab:hyp} lists every confirmatory hypothesis with its margin, its recomputed result at both targets and its verdict. Three further hypotheses of the first pre-registration were not tested or not confirmatory: H2 (D against the controls B and C) and H5 (D against E) were gated on H1 and were therefore \emph{not tested}; H3 (gradient alignment) is a mechanism check that is reported in \cref{sec:h3}; H4 (stochastic gradient descent with momentum in a deeper network) lies outside the experiments of this thesis.
+
+\begin{table}[h]
+\centering\small
+\caption{Confirmatory hypotheses. Intervals: $97.5\%$ for H1, H6, H7a, H7b and $98.3\%$ for H8--H10, paired bootstrap. A verdict needs both targets to agree (\cref{sec:stats}). The ``margin'' is the saving that must be exceeded for \emph{supported}.}
+\label{tab:hyp}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l l l l l l@{}}
+\toprule
+ & Comparison & Margin & change to 0.97 (\%) & change to 0.975 (\%) & Verdict\\
+\midrule
+\input{tables/tab_hyp}\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\paragraph{Reading the table.} A negative change means the first arm is cheaper. H1 and H6 are \emph{refuted} (the interval excludes a saving of $15\%$); H7a, H7b, H8, H9 and H10 are \emph{supported}. The outcomes of H1 and H6 are null results by pre-registered definition, and are as reportable as the positive ones. H7b has margin $0\%$ because it is a control for a batch-size explanation, not a second saving target.

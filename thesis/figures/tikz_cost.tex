@@ -1,0 +1,35 @@
+% Cost of one step in FLOPs: full vs selective (Chapter 3)
+\begin{tikzpicture}[x=0.0385cm,y=1cm,
+  lab/.style={font=\small}]
+\def\F{68.81}\def\W{68.81}\def\X{17.43}
+% full step
+\node[lab,anchor=east] at (-2,0.0) {arm A, full backward};
+\fill[oiSky!70] (0,-0.3) rectangle (\F,0.3);
+\fill[oiGreen!70] (\F,-0.3) rectangle (\F+\W,0.3);
+\fill[oiOrange!70] (\F+\W,-0.3) rectangle (\F+\W+\X,0.3);
+\node[lab,anchor=west] at (156,0) {155.1};
+% selective, phi=0.3, k=39
+\def\kk{0.30469}
+\node[lab,anchor=east] at (-2,-1.0) {$\phi=0.30$ ($k=39$)};
+\fill[oiSky!70] (0,-1.3) rectangle (\F,-0.7);
+\fill[oiGreen!70] (\F,-1.3) rectangle (\F+\W*\kk,-0.7);
+\fill[oiOrange!70] (\F+\W*\kk,-1.3) rectangle (\F+\W*\kk+\X*\kk,-0.7);
+\node[lab,anchor=west] at (96.2,-1) {95.1\ (0.613)};
+% selective, phi=0.2, k=26
+\def\kj{0.203125}
+\node[lab,anchor=east] at (-2,-2.0) {$\phi=0.20$ ($k=26$)};
+\fill[oiSky!70] (0,-2.3) rectangle (\F,-1.7);
+\fill[oiGreen!70] (\F,-2.3) rectangle (\F+\W*\kj,-1.7);
+\fill[oiOrange!70] (\F+\W*\kj,-2.3) rectangle (\F+\W*\kj+\X*\kj,-1.7);
+\node[lab,anchor=west] at (87.4,-2) {86.3\ (0.557)};
+% legend
+\node[draw=none,fill=oiSky!70,minimum width=3mm,minimum height=3mm,inner sep=0] at (4,-3.2) {};
+\node[lab,font=\scriptsize,anchor=west] at (8,-3.2) {forward (all rows)};
+\node[draw=none,fill=oiGreen!70,minimum width=3mm,minimum height=3mm,inner sep=0] at (62,-3.2) {};
+\node[lab,font=\scriptsize,anchor=west] at (66,-3.2) {weight gradients};
+\node[draw=none,fill=oiOrange!70,minimum width=3mm,minimum height=3mm,inner sep=0] at (112,-3.2) {};
+\node[lab,font=\scriptsize,anchor=west] at (116,-3.2) {input gradients};
+% axis
+\draw[->] (0,-3.9) -- (165,-3.9) node[right,lab]{MFLOPs per step};
+\foreach \t in {0,50,100,150}{\draw (\t,-3.9)--(\t,-4.0) node[below,font=\scriptsize]{\t};}
+\end{tikzpicture}
