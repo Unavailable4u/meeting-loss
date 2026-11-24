@@ -1,7 +1,7 @@
 \chapter{Conclusion and Future Work}\label{ch:conclusion}
 
 \section{Conclusion}
-This thesis tested two ideas for cheaper training of a small neural network under one strict protocol: counted FLOPs to a fixed validation accuracy, equal tuning of every arm, paired seeds, and hypotheses locked before the confirmatory runs.
+This report tested two ideas for cheaper training of a small neural network under one strict protocol: counted FLOPs to a fixed validation accuracy, equal tuning of every arm, paired seeds, and hypotheses locked before the confirmatory runs.
 
 The first idea, an auxiliary meeting loss derived from simple difference target propagation, did not save compute. It was refuted by a pre-registered test ($+36.9\%$ and $+35.5\%$ more FLOPs than a tuned baseline), and a set of controls, variants and mechanism checks showed that the result is not an artefact of one detail: the signal is well aligned with the gradient, and giving it more strength did not help. The evidence is consistent with a redundancy explanation.
 
@@ -21,4 +21,4 @@ In the order in which they would most increase the weight of the results:
 \item \textbf{More reliable tuning}: re-evaluating the top trials on fresh seeds before selection, and a larger number of tunings for every arm and not only for the baseline.
 \end{enumerate}
 
-\paragraph{From thesis to paper.} The material divides naturally into a focused paper, with the selective backward pass (Studies~2 and 3) as its main contribution and the meeting-loss negative result as a short motivating section, and the protocol and its lessons as a methodological contribution. The paper would need items 1--3 above. A workshop version could be written with the current evidence if the limitations of \cref{sec:limitations} are stated prominently.
+\paragraph{From report to paper.} The material divides naturally into a focused paper, with the selective backward pass (Studies~2 and 3) as its main contribution and the meeting-loss negative result as a short motivating section, and the protocol and its lessons as a methodological contribution. The paper would need items 1--3 above. A workshop version could be written with the current evidence if the limitations of \cref{sec:limitations} are stated prominently.

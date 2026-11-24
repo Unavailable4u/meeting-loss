@@ -1,6 +1,6 @@
 # Meeting Loss: a bidirectional learning signal for faster neural network training
 
-**Status:** Stage 1 in progress, method v1.1 (see `docs/PLAN.md` for the live status).
+**Status:** Studies 1 to 3 complete (`prereg-v1` to `prereg-v3`); see `docs/PLAN.md` for the live status and `report/` for the write-up.
 **Started:** 2026-10-21
 
 ## What this project is
@@ -43,6 +43,7 @@ meeting-loss/
 │   ├── reference/         background documents (historical; do not edit, supersede instead)
 │   └── templates/         blank templates for every kind of entry
 ├── paper/                 draft, claims register, figure map, bibliography
+├── report/                LaTeX source of the technical report (figures and tables regenerate from results/raw/)
 ├── src/                   model, losses, training loop, diagnostics, FLOP counting (starter code, untested until Stage 2)
 ├── configs/               one YAML per experiment family
 ├── scripts/               sweeps, analysis, figure generation

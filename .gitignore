@@ -11,3 +11,16 @@ wandb/
 sweep_*.log
 final_*.log
 *.patch
+
+# LaTeX build files (report/)
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.bbl
+report/*.blg
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz

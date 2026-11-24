@@ -1,19 +1,18 @@
 % =============================================================================================
-%  MSc/BSc thesis:  Which Ideas Actually Save Compute?
+%  Independent research report:  Which Ideas Actually Save Compute?
 %  Build:  latexmk -pdf main.tex        (needs: pdflatex, bibtex; all packages are standard TeX Live)
-%  Edit your name, degree, university and supervisor in  metadata.tex
+%  Edit authors, affiliation and date in  metadata.tex
 % =============================================================================================
 \documentclass[12pt,a4paper,twoside,openright]{report}
 \input{metadata}
 \input{preamble}
-\hypersetup{pdftitle={\thesistitle},pdfauthor={\thesisauthor}}
+\hypersetup{pdftitle={\reporttitle},pdfauthor={\reportauthorsplain}}
 
 \begin{document}
 \pagenumbering{roman}
 \input{frontmatter/titlepage}
 \input{frontmatter/declaration}
 \input{frontmatter/abstract}
-\input{frontmatter/acknowledgements}
 \tableofcontents
 \listoffigures
 \listoftables

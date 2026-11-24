@@ -193,6 +193,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 ## D-021: Selective backward pass as a candidate follow-up line after the pilot (E-010); proposed, items marked OPEN are not decided
 - Date: 2026-10-25
 - Status: **proposed**. Drafted by the assistant for review; nothing below is accepted until the researcher marks it. D-020 (the gate decision after Stage 3, and the Stage 4 mechanism checks A to D) is a separate decision and is still open; this entry does not choose between them.
+- Update (2026-11-25): the OPEN items of this entry were answered by D-023 (accepted 2026-10-26); the entry is kept as written.
 - Status update (2026-10-26): **accepted with the choices of D-023**, which answers the OPEN items (a) to (d) below. The text of this entry is unchanged.
 - Context: E-009 found that the highest-loss 30% of a batch carries nearly all of the gradient after about step 500. The pilot of the selective backward pass (E-010, exploratory, seeds 600 to 602) met the GO rule written before the run: S30 and S50 reached 0.97 and 0.975 at 0.61 to 0.77 of tuned A's FLOPs, with no missed seed, and the random control R30 did worse than A (F-012). The pilot adds an arm to the locked `src/` (DR-007). Related work (selective backprop, Jiang et al. 2019; importance sampling, Katharopoulos and Fleuret 2018; online batch selection, Loshchilov and Hutter 2015) is not yet verified, so no novelty claim exists.
 - Decision (proposed):
@@ -222,6 +223,7 @@ Newest decisions are added at the bottom. Never delete an entry: mark it `supers
 ## D-022: Reference baseline for `prereg-v2`: four further independent tunings of arm A (tags t5 to t8), selection runs only now; proposed, items marked OPEN are not decided
 - Date: 2026-10-25
 - Status: **proposed**. Drafted by the assistant for review; nothing below is accepted until the researcher marks it. It answers OPEN item (b) of D-021 and decision 2 of `docs/notes/selective-backward-prereg-prep.md`; it does not choose among the D-020 options. Numbered D-022 because D-020 and D-021 were already taken by other proposals when this was written.
+- Update (2026-11-25): the OPEN items of this entry were answered by D-023 (accepted 2026-10-26); the entry is kept as written.
 - Status update (2026-10-26): **accepted with the choices of D-023**: K = 4 (tags `t5` to `t8`), the reference rule is the two-tier design of D-023 (not a single best-of-all reference), and S is tuned once as a secondary arm. The text of this entry is unchanged.
 - Context: F-011 and R-21: two tunings of arm A tie at selection but differ by 17% to 34% on 20 final seeds, a larger spread than the 15% margin. The seed noise is small (SD of log steps 0.08 to 0.12), so the tuned configuration is the dominant noise. A test of the selective backward pass (H7 draft) against "tuned A" would inherit it. A review of the Stage 3 results by a separate session recommended four further tunings of A; this entry adapts that to the tags and seeds already reserved in the repo (t3 and t4 are for checks C and D).
 - Decision (proposed):

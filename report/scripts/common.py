@@ -10,7 +10,7 @@ import sys
 
 import numpy as np
 
-REPO = pathlib.Path(os.environ.get("MEETING_LOSS_REPO", "/home/claude/meeting-loss"))
+REPO = pathlib.Path(os.environ.get("MEETING_LOSS_REPO", pathlib.Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(REPO))
 from src.sweep import load_run, score_run, paired_pct_change  # noqa: E402
 
