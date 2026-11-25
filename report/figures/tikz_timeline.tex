@@ -1,19 +1,23 @@
-% Project timeline (Chapter 4). Only dated events: commit dates, tag dates and the dates in the run-log file names.
+% Project timeline (Chapter 1). Only dated events: commit dates, tag dates and the dates in the run-log file names.
+% Every box sits directly above or below its date, so the leader lines are vertical and cross no other box.
 \begin{tikzpicture}[x=1.45cm,
-  ev/.style={draw,rounded corners=2pt,font=\scriptsize,align=center,fill=white,inner sep=3pt,text width=2.3cm},
-  lock/.style={ev,fill=oiBlue!12,draw=oiBlue},
+  ev/.style={draw,rounded corners=2pt,font=\scriptsize,align=center,fill=white,inner sep=3pt,text width=2.45cm,
+             execute at begin node={\hyphenpenalty=10000 \exhyphenpenalty=10000 }},
+  lock/.style={ev,fill=oiBlue!12,draw=oiBlue,text width=2.6cm},
   expl/.style={ev,fill=oiOrange!12,draw=oiOrange!80!black}]
 \draw[-{Stealth},thick] (-0.3,0) -- (10.6,0);
 \foreach \x/\d in {0/20,1/21,2/22,3/23,4/24,5/25,6/26,7/27,8/28,9/29,10/30}{
   \draw (\x,0.06)--(\x,-0.06); \node[font=\scriptsize,below] at (\x,-0.08) {\d};}
 \node[font=\scriptsize,anchor=east] at (-0.4,0) {Oct 2026};
-\node[expl] (a) at (0.9,1.45) {first commit (20th);\\pilots, diagnostics\\(21st--22nd)};
-\node[lock] (b) at (3.0,2.15) {\textbf{prereg-v1} locked\\\code{3378d36}\\H1, H6: 150 runs};
-\node[lock] (d) at (6.4,2.15) {\textbf{prereg-v2} locked\\\code{cc2830c}\\H7a, H7b: 220 runs (27th)};
-\node[lock] (g) at (9.55,1.45) {\textbf{prereg-v3} locked\\\code{a49e9e3}\\H8--H10: 260 runs};
-\node[expl] (e) at (6.0,-1.45) {dose-response\\runs (26th)};
-\node[expl] (f1) at (8.1,-1.45) {headroom: 150 runs (28th)};
-\node[expl] (f2) at (9.9,-1.45) {look 2: 120 runs (29th)};
-\draw[black!50] (a.south)--(1,0); \draw[black!50] (b.south)--(3,0); \draw[black!50] (d.south)--(6,0); \draw[black!50] (g.south)--(10,0);
-\draw[black!50] (e.north)--(6,0); \draw[black!50] (f1.north)--(8,0); \draw[black!50] (f2.north)--(9,0);
+% above the axis: first commit and the three lock commits
+\node[expl] (a) at (1,1.25) {first commit (20th);\\pilots, diagnostics\\(21st--22nd)};
+\node[lock] (b) at (3,2.3) {\textbf{\mbox{prereg-v1}} locked\\\code{3378d36}\\H1, H6:\\150 runs};
+\node[lock] (d) at (6,2.3) {\textbf{\mbox{prereg-v2}} locked\\\code{cc2830c}\\H7a, H7b:\\220 runs (27th)};
+\node[lock] (g) at (10,1.25) {\textbf{\mbox{prereg-v3}} locked\\\code{a49e9e3}\\H8--H10:\\260 runs};
+% below the axis: exploratory runs
+\node[expl,text width=2cm] (e) at (6,-1.3) {dose-response\\runs (26th)};
+\node[expl,text width=2cm] (f1) at (8,-1.3) {headroom:\\150 runs (28th)};
+\node[expl,text width=2cm] (f2) at (9,-2.6) {look 2:\\120 runs (29th)};
+\foreach \n/\xx in {a/1,b/3,d/6,g/10}{\draw[black!50] (\n.south) -- (\xx,0);}
+\foreach \n/\xx in {e/6,f1/8,f2/9}{\draw[black!50] (\n.north) -- (\xx,0);}
 \end{tikzpicture}

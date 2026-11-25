@@ -46,14 +46,14 @@ Group & GFLOPs & steps & never & change (\%) & GFLOPs & steps & never & change (
 \begin{figure}[t]
 \centering
 \includegraphics[width=\textwidth]{fig_s3_curves}
-\caption{Study 3 (20 seeds, $95\%$ bands). (a) Validation accuracy against cumulative GFLOPs, with all selection passes charged. (b) The same runs against the number of optimiser updates. In updates, S20w0 is only slightly ahead of the baseline and Selective-Backprop is far ahead; in FLOPs the order is reversed.}
+\caption{Study 3 (20 seeds, $95\%$ bands). (a) Validation accuracy against cumulative GFLOPs, with all selection passes charged; triangles on the lower axis mark the mean cost to reach $0.975$ under the per-seed scoring rule. (b) The same runs against the number of optimiser updates. In updates, S20w0 is only slightly ahead of the baseline and Selective-Backprop is far ahead; in FLOPs the order is reversed.}
 \label{fig:s3-curves}
 \end{figure}
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\textwidth]{fig_s3_bars}
-\caption{Mean GFLOPs to reach $0.97$ (left) and $0.975$ (right) for all 13 groups of Study 3, with $95\%$ bootstrap intervals of the mean (black: baseline tunings; orange: Selective-Backprop; grey: random rows; blue: selective variants). The six baseline tunings are close to each other on these seeds; every selective variant with top-$k$ selection is far below them.}
+\caption{Mean GFLOPs to reach $0.97$ (left) and $0.975$ (right) for all 13 groups of Study 3, with $95\%$ bootstrap intervals of the mean (black: baseline tunings; orange: Selective-Backprop; grey: random rows; blue: selective variants; dashed line: mean of A1). The six baseline tunings are close to each other on these seeds; every selective variant with top-$k$ selection is far below them.}
 \label{fig:s3-bars}
 \end{figure}
 

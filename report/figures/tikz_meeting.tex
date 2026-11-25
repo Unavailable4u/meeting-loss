@@ -1,39 +1,41 @@
-% Architecture and the meeting loss (Chapter 3); explicit coordinates, width about 13.5 cm
+% Architecture and the meeting loss (Chapter 3); explicit coordinates, about 15 cm wide before it is resized to the text width.
+% Layout rule: no node shares a row with another node closer than 0.5 cm, and no label sits on an arrow.
 \begin{tikzpicture}[
-  box/.style={draw,rounded corners=2pt,minimum height=8mm,align=center,font=\small,fill=white},
-  fnet/.style={box,fill=oiSky!25,minimum width=24mm},
-  gnet/.style={box,fill=oiOrange!25,minimum width=24mm},
+  box/.style={draw,rounded corners=2pt,minimum height=9mm,align=center,font=\small,fill=white},
+  fnet/.style={box,fill=oiSky!25,minimum width=26mm},
+  gnet/.style={box,fill=oiOrange!25,minimum width=26mm},
   vec/.style={draw,circle,inner sep=1.6pt,font=\small,fill=white},
-  tgt/.style={box,minimum width=36mm},
+  tgt/.style={box,minimum width=40mm},
   arr/.style={-{Stealth[length=2.2mm]},line width=0.6pt},
   sg/.style={-{Stealth[length=2.2mm]},line width=0.6pt,dashed,oiGrey},
-  lossn/.style={draw=oiVermillion,thick,rounded corners=2pt,font=\small,fill=oiVermillion!8,align=center,minimum height=8mm}
+  lossn/.style={draw=oiVermillion,thick,rounded corners=2pt,font=\small,fill=oiVermillion!8,align=center,minimum height=9mm}
 ]
 % bottom row: the network
 \node[vec] (x) at (0,0) {$x$};
-\node[fnet] (Fl) at (2.6,0) {$\Flow$\\[-1pt]\scriptsize 784$\to$256$\to$128};
-\node[vec] (h) at (5.4,0) {$h$};
-\node[fnet] (Fu) at (8.2,0) {$\Fup$\\[-1pt]\scriptsize 128$\to$256$\to$10};
-\node[vec] (z) at (10.8,0) {$z$};
-\node[lossn] (ce) at (13.2,0) {$\Ltask$\\[-1pt]\scriptsize cross-entropy};
+\node[fnet] (Fl) at (2.7,0) {$\Flow$\\[-1pt]\scriptsize 784$\to$256$\to$128};
+\node[vec] (h) at (5.6,0) {$h$};
+\node[fnet] (Fu) at (8.5,0) {$\Fup$\\[-1pt]\scriptsize 128$\to$256$\to$10};
+\node[vec] (z) at (11.5,0) {$z$};
+\node[lossn] (ce) at (14.1,0) {$\Ltask$\\[-1pt]\scriptsize cross-entropy};
 \draw[arr] (x)--(Fl); \draw[arr] (Fl)--(h); \draw[arr] (h)--(Fu); \draw[arr] (Fu)--(z); \draw[arr] (z)--(ce);
-% label y enters the task loss from above
-\node[vec] (y) at (13.2,1.7) {$y$};
+% the label y enters the task loss from above
+\node[vec] (y) at (14.1,1.6) {$y$};
 \draw[arr] (y)--(ce);
-% upper rows: the backward network G and the target
-\node[vec] (p) at (10.8,1.7) {$p$};
-\draw[sg] (z)--node[right,font=\scriptsize,oiGrey]{softmax, sg}(p);
-\node[vec] (e) at (10.8,3.5) {$\onehot$};
-\node[gnet] (G) at (8.2,2.6) {$G$\\[-1pt]\scriptsize 10$\to$256$\to$128};
+% middle row: softmax output p, backward network G, target b and meeting loss
+\node[vec] (p) at (11.5,1.6) {$p$};
+\draw[sg] (z)--(p) node[midway,right=1.5pt,font=\scriptsize,oiGrey]{softmax, sg};
+\node[vec] (e) at (11.5,3.9) {$\onehot$};
+\node[gnet] (G) at (9.1,2.7) {$G$\\[-1pt]\scriptsize 10$\to$256$\to$128};
 \draw[arr] (p)--(G.south east);
 \draw[arr] (e)--(G.north east);
-\node[tgt] (b) at (4.7,2.6) {target\\[-1pt]$b=\mathrm{sg}(h)+G(\onehot)-G(p)$};
+\node[tgt] (b) at (5.0,2.7) {target\\[-1pt]$b=\mathrm{sg}(h)+G(\onehot)-G(p)$};
 \draw[arr] (G)--(b);
-\draw[sg] (h.north)--++(0,0.55) -- (5.4,2.05);   % sg(h) enters the target
-\node[lossn] (lm) at (1.2,2.6) {$\Lmeet=\|h-b\|^2$};
+\draw[sg] (h.north) -- (h.north |- b.south);       % sg(h) enters the target
+\node[lossn,minimum width=32mm] (lm) at (0.7,2.7) {$\Lmeet=\|h-b\|^2$};
 \draw[arr] (b)--(lm);
-% gradient of the meeting loss reaches F_low only (through h)
-\draw[arr,oiVermillion,thick] (lm.south)--(1.2,1.0)--(Fl.north west |- 0,0.45) -- (Fl.north west);
-\node[font=\scriptsize,oiVermillion,align=left,anchor=north east] at (0.9,1.7) {gradient flows\\into $\Flow$ only};
-\node[font=\scriptsize,oiGrey,align=center] at (8.6,1.1) {$G$ is trained by $\Linv=\|G(p)-\mathrm{sg}(h)\|^2$};
+% the gradient of the meeting loss reaches F_low only (through h): down, then across, then down into F_low
+\draw[arr,oiVermillion,thick] (lm.south) -- ++(0,-0.7) -| (Fl.north);
+\node[font=\scriptsize,oiVermillion,align=left,anchor=west] at (2.85,1.0) {gradient flows\\into $\Flow$ only};
+% how G is trained
+\node[font=\scriptsize,oiGrey,align=center] at (9.1,1.15) {$G$ is trained by\\$\Linv=\|G(p)-\mathrm{sg}(h)\|^2$};
 \end{tikzpicture}

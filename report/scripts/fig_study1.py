@@ -4,6 +4,8 @@ import pathlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 import style
 from common import REPO, TARGETS, arr, curve, curve_steps, load_stage3, load_prereg2, load_prereg3, pct
@@ -26,10 +28,12 @@ def fig_s1_curves(s3):
     fig, axs = plt.subplots(1, 2, figsize=(6.6, 2.7), sharey=True)
     order = [("A", "A (tuned baseline)"), ("A2", "A2 (second tuning)"), ("B", "B (deep supervision)"), ("D", "D (meeting loss)")]
     for k, lab in order:
+        ls = "--" if k == "A2" else "-"
         st, Y = curve_steps(s3[k])
-        band(axs[0], st, Y, style.ARM[k], lab, ls="--" if k == "A2" else "-")
+        band(axs[0], st, Y, style.ARM[k], lab, ls=ls)
         x, Y = curve(s3[k], grid=np.linspace(0, 400e9, 400))
-        band(axs[1], x / G, Y, style.ARM[k], lab, ls="--" if k == "A2" else "-")
+        band(axs[1], x / G, Y, style.ARM[k], None, ls=ls)
+        style.mean_marker(axs[1], arr(s3[k], 0.975).mean() / G, style.ARM[k])
     for ax in axs:
         for t in TARGETS:
             ax.axhline(t, color="#999999", lw=0.7, ls=":")
@@ -39,12 +43,15 @@ def fig_s1_curves(s3):
     axs[0].set_xlabel("training step")
     axs[1].set_xlabel("cumulative GFLOPs")
     axs[0].set_ylabel("validation accuracy")
-    axs[0].text(2150, 0.9705, "0.970", ha="right", va="bottom", fontsize=7, color="#666666")
-    axs[0].text(2150, 0.9755, "0.975", ha="right", va="bottom", fontsize=7, color="#666666")
-    axs[0].legend(loc="lower right")
+    # target labels sit outside the data area, in the right margin of panel (b)
+    for t in TARGETS:
+        axs[1].text(1.01, t, f"{t:.3f}", transform=axs[1].get_yaxis_transform(), ha="left", va="center", fontsize=7, color="#666666", clip_on=False)
+    h, l = axs[0].get_legend_handles_labels()
+    h.append(style.mean_marker_handle()); l.append(h[-1].get_label())
     style.panel_label(axs[0], "(a)", -0.2)
     style.panel_label(axs[1], "(b)", -0.1)
     fig.tight_layout()
+    fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=3, frameon=False)
     fig.savefig(OUT / "fig_s1_curves.pdf")
     plt.close(fig)
 
@@ -54,7 +61,7 @@ def fig_s1_forest(s3):
     rows = [("D", "D meeting loss ($H1$)", 20), ("B", "B deep supervision ($H6$)", 20), ("A2", "A2 second tuning of A", 20),
             ("V3", "V3 frozen $G$", 10), ("V2", "V2 augmented output", 10), ("V1", "V1 noisy inverse", 10), ("F", "F exact-gradient target", 10),
             ("E", "E lower-layer lr multiplier", 10), ("B-code", "B-code (DSN reference code)", 10), ("C", "C autoencoder", 10)]
-    fig, ax = plt.subplots(figsize=(6.4, 3.7))
+    fig, ax = plt.subplots(figsize=(6.4, 3.8))
     ax.axvspan(-100, -15, color="#009E73", alpha=0.10, lw=0)
     ax.axvline(0, color="black", lw=0.8)
     ax.axvline(-15, color="#009E73", lw=0.8, ls="--")
@@ -69,14 +76,16 @@ def fig_s1_forest(s3):
                         mfc=col if j == 0 else "white", label=f"target {t}" if i == 0 else None)
     ax.set_yticks(range(len(rows)))
     ax.set_yticklabels([r[1] for r in rows])
-    ax.invert_yaxis()
-    ax.set_xlim(-32, 190)
-    ax.set_xlabel("paired change in FLOPs-to-target vs. tuned arm A (%); 97.5% bootstrap interval")
-    ax.text(-16, -0.45, "gain $\\geq$ 15%", color="#009E73", fontsize=7.5, ha="right", va="center")
+    ax.set_ylim(len(rows) - 0.4, -0.6)
+    ax.set_xlim(-32, 180)
+    ax.set_xlabel("paired change in FLOPs-to-target vs. tuned arm A (%), 97.5% bootstrap interval\nnegative = fewer FLOPs than A")
+    # the success zone is labelled inside its own band (rotated), so that no text touches a marker or an interval
+    ax.text(-23.5, (len(rows) - 1) / 2, "gain $\\geq$ 15%", color="#007A5A", fontsize=7.5, ha="center", va="center", rotation=90)
     ax.axhline(2.5, color="#BBBBBB", lw=0.6)
-    ax.text(185, 1.45, "20 seeds", ha="right", fontsize=7.5, color="#666666")
-    ax.text(185, 4.6, "10 seeds (descriptive)", ha="right", fontsize=7.5, color="#666666")
-    ax.legend(loc="center right", bbox_to_anchor=(1.0, 0.42))
+    gt = ax.get_yaxis_transform()
+    ax.text(0.99, 1.5, "20 seeds", transform=gt, ha="right", va="center", fontsize=7.5, color="#666666")
+    ax.text(0.99, 5.0, "10 seeds (descriptive)", transform=gt, ha="right", va="center", fontsize=7.5, color="#666666")
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2)
     ax.grid(axis="y", visible=False)
     fig.savefig(OUT / "fig_s1_forest.pdf")
     plt.close(fig)
@@ -124,7 +133,7 @@ def fig_tuning_noise(s3, p2):
     ax.invert_yaxis()
     ax.set_xlim(170, 340)
     ax.set_xlabel("GFLOPs to 0.975")
-    ax.set_title("selection (2 seeds, open) vs. final (20 seeds, filled)", fontsize=8.5)
+    ax.set_title("selection score (2 seeds, open)\nvs. final (20 seeds, filled)", fontsize=8.5)
     ax.grid(axis="y", visible=False)
     style.panel_label(ax, "(a)", -0.22)
 
@@ -146,7 +155,9 @@ def fig_tuning_noise(s3, p2):
     ax.set_title("six tunings of the baseline, 20 fresh seeds", fontsize=8.5)
     ax.plot([], [], "D", mfc="white", mec="black", label="selection score")
     ax.plot([], [], "o", color=style.OI["blue"], label="mean, 95% CI")
-    ax.legend(loc="upper right")
+    lo_, hi_ = ax.get_ylim()
+    ax.set_ylim(lo_, hi_ + 0.2 * (hi_ - lo_))      # headroom for the legend, so that it covers no point
+    ax.legend(loc="upper center", ncol=2, fontsize=7.5)
     style.panel_label(ax, "(b)", -0.18)
     fig.tight_layout()
     fig.savefig(OUT / "fig_tuning_noise.pdf")
@@ -164,21 +175,20 @@ def fig_dose():
             ax.errorbar(s.rho, s.steps_change_pct, yerr=[s.steps_change_pct - s.steps_lo, s.steps_hi - s.steps_change_pct],
                         fmt="o-", color=col, capsize=2, ms=4, label=lab, lw=1.1)
         ax.axhline(0, color="black", lw=0.7)
-        ax.axhline(-10, color="#009E73", lw=0.8, ls="--")
+        ax.axhline(-10, color="#009E73", lw=0.8, ls="--", label="10% gain" if tgt == 0.97 else None)
         ax.set_xscale("log")
         ax.set_ylim(-30, 240)
         ax.set_xlabel(r"dose $\rho$")
         ax.set_title(f"steps to {tgt}", fontsize=8.5)
     axs[0].set_ylabel("change vs. $\\rho=0$ (%)")
     axs[0].legend(loc="upper left")
-    axs[0].text(0.0011, -9, "10% gain", color="#009E73", fontsize=7, va="top")
     ax = axs[2]
     for d, lab, col in ((pd.concat([d2, d1[d1.rho > 0]]).drop_duplicates(["rho", "target"]), "relu", style.OI["vermillion"]), (d3, "tanh", style.OI["blue"])):
         s = d[d.target == 0.975].sort_values("rho")
         ax.plot(np.where(s.rho == 0, 3e-4, s.rho), s.diag_h_var, "o-", color=col, ms=4, lw=1.1, label=lab)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel(r"dose $\rho$  (0 drawn at $3\!\times\!10^{-4}$)")
+    ax.set_xlabel(r"dose $\rho$ ($\rho=0$ drawn at $3\!\times\!10^{-4}$)", fontsize=8)
     ax.set_title("scale of the middle state $h$", fontsize=8.5)
     ax.set_ylabel("variance of $h$")
     for ax, l in zip(axs, "(a)(b)(c)".replace(")(", ")|(").split("|")):
@@ -202,7 +212,7 @@ def fig_concentration():
     ax.set_xlabel("training step (arm A, fixed batches)")
     ax.set_ylabel("share of per-example gradient norm")
     ax.set_ylim(0, 1.02)
-    ax.legend(loc="center right", fontsize=7)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=2, fontsize=7)   # below the axes: no line crosses it
     fig.savefig(OUT / "fig_concentration.pdf")
     plt.close(fig)
 
@@ -218,7 +228,6 @@ def fig_geometry():
         ax.plot(mu.index, mu.values, "o-", color=c, ms=3.5, label=lab)
         ax.fill_between(mu.index, lo.values, hi.values, color=c, alpha=0.15, lw=0)
     ax.set_xscale("log"); ax.set_ylim(0, 1); ax.set_xlabel("training step"); ax.set_title("lower-layer parameter space", fontsize=8.5)
-    ax.legend(loc="lower left", fontsize=7)
     ax = axs[1]
     for q, lab, c in (("cos_meet_bp_w", "meeting vs. backprop", style.OI["vermillion"]), ("cos_meet_pinv_w", "meeting vs. Gauss--Newton", style.OI["green"]),
                       ("cos_bp_pinv_w", "backprop vs. Gauss--Newton", style.OI["black"])):
@@ -227,9 +236,10 @@ def fig_geometry():
         ax.plot(mu.index, mu.values, "o-", color=c, ms=3.5, label=lab)
         ax.fill_between(mu.index, lo.values, hi.values, color=c, alpha=0.15, lw=0)
     ax.set_xscale("log"); ax.set_ylim(0, 1); ax.set_xlabel("training step"); ax.set_title("middle-state space ($h$), per example", fontsize=8.5)
-    ax.legend(loc="lower left", fontsize=7)
     style.panel_label(axs[0], "(a)", -0.15); style.panel_label(axs[1], "(b)", -0.15)
     fig.tight_layout()
+    for ax in axs:                                 # legends go below the panels, created after tight_layout so that they do not shrink the axes
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.3), fontsize=7)
     fig.savefig(OUT / "fig_geometry.pdf")
     plt.close(fig)
 

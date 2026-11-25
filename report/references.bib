@@ -1,10 +1,15 @@
 % ---------------------------------------------------------------------------------------------------
-% Bibliography. Verification status (done while writing this thesis, 31 Oct 2026):
-%   CHECKED against a web source (authors, venue, year; pages only where listed):
-%     jiang2019selective, kaddour2023notrain, shibuya2023fixed, lee2015dtp, kawaguchi2020ordered,
-%     bartunov2018assessing, meulemans2020theoretical (authors, venue)
-%   WRITTEN FROM MEMORY (authors, venue and year are well known; page numbers deliberately omitted):
-%     all other entries.  Please check each one against the publisher page before you submit.
+% Bibliography. Verification status (25 Nov 2026): 29 of the 31 entries were checked against web sources on
+% 25 Nov 2026 (publisher, proceedings, arXiv, ACL Anthology, CVF, PubMed or DOI-registry pages): authors and
+% order, title, venue, year, volume, and page range where a page gave one. The other two, lee2015dtp and
+% kaddour2023notrain, were checked on 31 Oct 2026 and not repeated. Fields no fetched page gave are left out
+% on purpose: page ranges of NeurIPS papers (their proceedings pages show none) and of the PyTorch paper, the
+% DOI of the PNAS paper, and the OpenReview records of the ICLR papers, which blocked automated access (their
+% venues are confirmed by the arXiv comment or the conference page instead). The page range of
+% bartunov2018assessing is from the 31 Oct check and was not found on the page fetched on 25 Nov.
+% Changes of 25 Nov 2026: author lists expanded where "and others" stood (mindermann2022prioritized,
+% dahl2023benchmarking, bouthillier2021accounting, paszke2019pytorch); ICLR author order of dehghani2022efficiency;
+% volumes, series and page ranges added; rasmus2015semi title case.
 % ---------------------------------------------------------------------------------------------------
 
 @article{rumelhart1986learning,
@@ -25,7 +30,8 @@
 @inproceedings{jaderberg2017decoupled,
   author = {Jaderberg, Max and Czarnecki, Wojciech Marian and Osindero, Simon and Vinyals, Oriol and Graves, Alex and Silver, David and Kavukcuoglu, Koray},
   title = {Decoupled Neural Interfaces using Synthetic Gradients},
-  booktitle = {International Conference on Machine Learning (ICML)}, year = {2017}}
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series = {Proceedings of Machine Learning Research}, volume = {70}, pages = {1627--1635}, year = {2017}}
 
 @misc{bengio2014auto,
   author = {Bengio, Yoshua},
@@ -56,17 +62,18 @@
 @inproceedings{lee2015deeply,
   author = {Lee, Chen-Yu and Xie, Saining and Gallagher, Patrick and Zhang, Zhengyou and Tu, Zhuowen},
   title = {Deeply-Supervised Nets},
-  booktitle = {International Conference on Artificial Intelligence and Statistics (AISTATS)}, year = {2015}}
+  booktitle = {International Conference on Artificial Intelligence and Statistics (AISTATS)},
+  series = {Proceedings of Machine Learning Research}, volume = {38}, pages = {562--570}, year = {2015}}
 
 @inproceedings{rasmus2015semi,
   author = {Rasmus, Antti and Berglund, Mathias and Honkala, Mikko and Valpola, Harri and Raiko, Tapani},
-  title = {Semi-Supervised Learning with Ladder Networks},
+  title = {Semi-supervised Learning with Ladder Networks},
   booktitle = {Advances in Neural Information Processing Systems (NeurIPS)}, volume = {28}, year = {2015}}
 
 @inproceedings{shrivastava2016ohem,
   author = {Shrivastava, Abhinav and Gupta, Abhinav and Girshick, Ross},
   title = {Training Region-based Object Detectors with Online Hard Example Mining},
-  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, year = {2016}}
+  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pages = {761--769}, year = {2016}}
 
 @misc{loshchilov2016online,
   author = {Loshchilov, Ilya and Hutter, Frank},
@@ -76,7 +83,8 @@
 @inproceedings{katharopoulos2018not,
   author = {Katharopoulos, Angelos and Fleuret, Fran{\c{c}}ois},
   title = {Not All Samples Are Created Equal: Deep Learning with Importance Sampling},
-  booktitle = {International Conference on Machine Learning (ICML)}, year = {2018}}
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series = {Proceedings of Machine Learning Research}, volume = {80}, pages = {2525--2534}, year = {2018}}
 
 @inproceedings{kawaguchi2020ordered,
   author = {Kawaguchi, Kenji and Lu, Haihao},
@@ -85,9 +93,10 @@
   series = {Proceedings of Machine Learning Research}, volume = {108}, pages = {669--679}, year = {2020}}
 
 @inproceedings{mindermann2022prioritized,
-  author = {Mindermann, S{\"o}ren and others},
+  author = {Mindermann, S{\"o}ren and Brauner, Jan M. and Razzak, Muhammed T. and Sharma, Mrinank and Kirsch, Andreas and Xu, Winnie and H{\"o}ltgen, Benedikt and Gomez, Aidan N. and Morisot, Adrien and Farquhar, Sebastian and Gal, Yarin},
   title = {Prioritized Training on Points that are Learnable, Worth Learning, and Not Yet Learnt},
-  booktitle = {International Conference on Machine Learning (ICML)}, year = {2022}}
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series = {Proceedings of Machine Learning Research}, volume = {162}, pages = {15630--15649}, year = {2022}}
 
 @misc{jiang2019selective,
   author = {Jiang, Angela H. and Wong, Daniel L.-K. and Zhou, Giulio and Andersen, David G. and Dean, Jeffrey and Ganger, Gregory R. and Joshi, Gauri and Kaminsky, Michael and Kozuch, Michael and Lipton, Zachary C. and Pillai, Padmanabhan},
@@ -97,7 +106,8 @@
 @inproceedings{schmidt2021crowded,
   author = {Schmidt, Robin M. and Schneider, Frank and Hennig, Philipp},
   title = {Descending through a Crowded Valley -- Benchmarking Deep Learning Optimizers},
-  booktitle = {International Conference on Machine Learning (ICML)}, year = {2021}}
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series = {Proceedings of Machine Learning Research}, volume = {139}, pages = {9367--9376}, year = {2021}}
 
 @inproceedings{kaddour2023notrain,
   author = {Kaddour, Jean and Key, Oscar and Nawrot, Piotr and Minervini, Pasquale and Kusner, Matt J.},
@@ -105,24 +115,25 @@
   booktitle = {Advances in Neural Information Processing Systems (NeurIPS)}, volume = {36}, year = {2023}}
 
 @inproceedings{dehghani2022efficiency,
-  author = {Dehghani, Mostafa and Arnab, Anurag and Beyer, Lucas and Vaswani, Ashish and Tay, Yi},
+  author = {Dehghani, Mostafa and Tay, Yi and Arnab, Anurag and Beyer, Lucas and Vaswani, Ashish},
   title = {The Efficiency Misnomer},
   booktitle = {International Conference on Learning Representations (ICLR)}, year = {2022}}
 
 @misc{dahl2023benchmarking,
-  author = {Dahl, George E. and others},
+  author = {Dahl, George E. and Schneider, Frank and Nado, Zachary and Agarwal, Naman and {Shama Sastry}, Chandramouli and Hennig, Philipp and Medapati, Sourabh and Eschenhagen, Runa and Kasimbeg, Priya and Suo, Daniel and Bae, Juhan and Gilmer, Justin and Peirson, Abel L. and Khan, Bilal and Anil, Rohan and Rabbat, Mike and Krishnan, Shankar and Snider, Daniel and Amid, Ehsan and Chen, Kongtao and Maddison, Chris J. and Vasudev, Rakshith and Badura, Michal and Garg, Ankush and Mattson, Peter},
   title = {Benchmarking Neural Network Training Algorithms},
   year = {2023}, howpublished = {arXiv:2306.07179}}
 
 @inproceedings{bouthillier2021accounting,
-  author = {Bouthillier, Xavier and others},
+  author = {Bouthillier, Xavier and Delaunay, Pierre and Bronzi, Mirko and Trofimov, Assya and Nichyporuk, Brennan and Szeto, Justin and {Mohammadi Sepahvand}, Nazanin and Raff, Edward and Madan, Kanika and Voleti, Vikram and {Ebrahimi Kahou}, Samira and Michalski, Vincent and Arbel, Tal and Pal, Chris and Varoquaux, Ga{\"e}l and Vincent, Pascal},
   title = {Accounting for Variance in Machine Learning Benchmarks},
-  booktitle = {Proceedings of Machine Learning and Systems (MLSys)}, volume = {3}, year = {2021}}
+  booktitle = {Proceedings of Machine Learning and Systems (MLSys)}, volume = {3}, pages = {747--769}, year = {2021}}
 
 @inproceedings{dodge2019show,
   author = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and Schwartz, Roy and Smith, Noah A.},
   title = {Show Your Work: Improved Reporting of Experimental Results},
-  booktitle = {Empirical Methods in Natural Language Processing (EMNLP)}, year = {2019}}
+  booktitle = {Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)},
+  address = {Hong Kong, China}, publisher = {Association for Computational Linguistics}, pages = {2185--2194}, year = {2019}}
 
 @article{bergstra2012random,
   author = {Bergstra, James and Bengio, Yoshua},
@@ -156,9 +167,11 @@
 
 @book{efron1993introduction,
   author = {Efron, Bradley and Tibshirani, Robert J.},
-  title = {An Introduction to the Bootstrap}, publisher = {Chapman \& Hall}, year = {1993}}
+  title = {An Introduction to the Bootstrap},
+  series = {Monographs on Statistics and Applied Probability}, number = {57},
+  publisher = {Chapman \& Hall}, address = {New York}, year = {1993}}
 
 @inproceedings{paszke2019pytorch,
-  author = {Paszke, Adam and others},
+  author = {Paszke, Adam and Gross, Sam and Massa, Francisco and Lerer, Adam and Bradbury, James and Chanan, Gregory and Killeen, Trevor and Lin, Zeming and Gimelshein, Natalia and Antiga, Luca and Desmaison, Alban and K{\"o}pf, Andreas and Yang, Edward and DeVito, Zachary and Raison, Martin and Tejani, Alykhan and Chilamkurthy, Sasank and Steiner, Benoit and Fang, Lu and Bai, Junjie and Chintala, Soumith},
   title = {{PyTorch}: An Imperative Style, High-Performance Deep Learning Library},
   booktitle = {Advances in Neural Information Processing Systems (NeurIPS)}, volume = {32}, year = {2019}}

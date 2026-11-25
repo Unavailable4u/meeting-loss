@@ -12,8 +12,8 @@ Works on Overleaf (upload the `report/` folder, main file `main.tex`, compiler p
 
 ## Edit first
 * `metadata.tex`: authors, affiliation, date (title page).
-* `frontmatter/declaration.tex`: one red TODO box for the statement on the use of AI assistance. Complete it and delete the box before publishing.
-* `references.bib`: the header says which entries were checked against a web source and which were written from memory. Check the rest before publishing.
+* `frontmatter/declaration.tex`: the statement on the use of AI assistance and the licence note (CC BY 4.0 for the report, MIT or Apache-2.0 for the code; see `../LICENSE.md`). Check that the wording matches what you did.
+* `references.bib`: the header says which entries were checked against a web source and when. Re-check before submitting to a venue.
 
 ## Layout
     main.tex, preamble.tex, metadata.tex, references.bib

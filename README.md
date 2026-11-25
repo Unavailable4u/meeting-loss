@@ -76,4 +76,7 @@ Follow the checklist in `docs/DOCUMENT_MAP.md`, Section 7. In short: read `docs/
 
 ## License
 
-To be decided before any public release (record the choice as a decision).
+- Code: MIT **or** Apache-2.0, at your option (`LICENSE-MIT`, `LICENSE-APACHE`).
+- Report, paper drafts, documentation, figures and results data: CC BY 4.0 (`LICENSE-CC-BY-4.0`).
+
+The split by folder is in [`LICENSE.md`](LICENSE.md); the choice is recorded as decision D-027.
