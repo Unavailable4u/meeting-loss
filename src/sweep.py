@@ -92,6 +92,13 @@ ARM_STEPS = {"base_b48": 8000}  # protocol horizon per sweep arm; every other ar
 SWEEP_ARMS["sb"] = ("sb", {"sb_beta": 2.0, "sb_history": 1024}, {})
 SWEEP_ARMS["selective20w0"] = ("selective", {"sel_frac": 0.2, "sel_warmup": 0, "sel_mode": "top"}, {})
 
+# Root-cause checks (D-028, DR-019). t13: the baseline tuned IN tanh (activation fixed, lr, wd and schedule searched, 25 trials,
+# 2 selection seeds), so that tanh comparisons have a tuned tanh baseline (the G2 check of E-014 used arm A's relu-tuned lr and wd).
+# t4: the learned replacement arm of check D (arm meet_replace, `replace_start` 0, `lam_meet` 1.0 fixed; act, lr, wd, schedule and
+# lam_inv searched, 25 trials, 2 selection seeds).
+SWEEP_ARMS["base_tanh"] = ("base", {"act": "tanh"}, {"act": None})
+SWEEP_ARMS["meet_replace"] = ("meet_replace", {"replace_start": 0, "lam_meet": 1.0}, {"lam_inv": _MEET["lam_inv"]})
+
 
 def expected_steps(arms):
     """Protocol horizon of a sweep over `arms`. Arms with different horizons need separate tags."""
@@ -123,7 +130,7 @@ def sample_trials(arm, tag, n=N_TRIALS):
     """Deterministic list of n hyperparameter dicts for this arm; depends only on (tag, arm)."""
     if arm not in SWEEP_ARMS:
         raise ValueError(f"unknown sweep arm {arm!r}; choose from {sorted(SWEEP_ARMS)}")
-    dims = {**COMMON, **SWEEP_ARMS[arm][2]}
+    dims = {k: v for k, v in {**COMMON, **SWEEP_ARMS[arm][2]}.items() if v is not None}   # None removes a common dimension
     rng = _rng(tag, arm)
     return [{k: _draw(rng, spec) for k, spec in dims.items()} for _ in range(n)]
 

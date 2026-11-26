@@ -41,7 +41,7 @@ def test_sampler_is_deterministic_and_depends_on_tag_and_arm():
 @pytest.mark.parametrize("arm", sorted(sweep.SWEEP_ARMS))
 def test_sampled_values_are_inside_the_d014_ranges(arm):
     extra = sweep.SWEEP_ARMS[arm][2]
-    dims = {**sweep.COMMON, **extra}
+    dims = {k: v for k, v in {**sweep.COMMON, **extra}.items() if v is not None}   # None removes a common dimension (DR-019)
     for hp in sweep.sample_trials(arm, "t1", n=60):
         assert set(hp) == set(dims)
         for k, spec in dims.items():

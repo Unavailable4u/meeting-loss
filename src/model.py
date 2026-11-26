@@ -10,6 +10,13 @@ Arms (docs/DECISIONS.md D-013):
   meet_grad    F  control: DTP-style exact-gradient target  h - eta * dL/dh
   meet_rho        check G0 (D-020, docs/notes/mechanism-dose-response.md): learned G as in arm D, but the meeting
                   signal's strength is set directly as rho times the task gradient at h (not a method: a dose)
+  meet_oracle     check B (D-028, docs/notes/mechanism-root-cause.md): an exact oracle direction (src/oracle.py: grad = the
+                  repaired control F', pinv, logit) added next to backprop with its strength set explicitly as rho times the
+                  task gradient at h (not a method: cost ignored)
+  meet_replace, meet_replace_frozen, meet_replace_oracle
+                  check D: the gradient from the top half is CUT at h (z = up(h.detach())); F_low receives only the
+                  meeting signal (learned G as in arm D / frozen random G as V3 / oracle direction). `replace_start`
+                  steps of ordinary backprop come first (default 0)
 Variant V1 (noise in the inverse loss) is the config key `sigma_inv > 0` on meet / meet_ao.
 Control E (lower-layer learning-rate multiplier) is the config key `low_lr_mult` (see src/train.py).
 
@@ -19,8 +26,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src import oracle
+
 MEET_ARMS = ("meet", "meet_ao", "meet_frozen")
-ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective", "meet_rho", "sb")  # sb: same network as base (src/sb.py)
+REPLACE_ARMS = ("meet_replace", "meet_replace_frozen", "meet_replace_oracle")   # check D (D-028)
+ROOT_CAUSE_ARMS = ("meet_oracle",) + REPLACE_ARMS                                # checks B and D (D-028)
+ARMS = ("base", "deepsup", "ae") + MEET_ARMS + ("meet_grad", "selective", "meet_rho", "sb") + ROOT_CAUSE_ARMS  # sb: same network as base (src/sb.py)
 
 
 def _act(name):
@@ -52,6 +63,11 @@ class MeetNet(nn.Module):
         elif arm == "meet_rho":
             # same G as arm D (created after low and up, so the initial weights of low and up equal arm A's for a given seed)
             self.G = nn.Sequential(nn.Linear(n_cls, d_hid), _act(act), nn.Linear(d_hid, d_mid))
+        elif arm in ("meet_replace", "meet_replace_frozen"):
+            # same G as arm D (created after low and up, so low and up start as in arm A for a given seed)
+            self.G = nn.Sequential(nn.Linear(n_cls, d_hid), _act(act), nn.Linear(d_hid, d_mid))
+            if arm == "meet_replace_frozen":
+                self.G.requires_grad_(False)   # frozen random feedback network (the V3 recipe), no inverse loss
         elif arm == "deepsup":
             self.aux = nn.Linear(d_mid, n_cls)
         elif arm == "ae":
@@ -78,14 +94,62 @@ def _aux_weight(cfg, step):
     return base
 
 
+def _replace_losses(model, x, y, cfg, step):
+    """Check D (D-028): the lower half is trained by the meeting signal ONLY. From step `replace_start` (default 0) on, the top
+    half sees h.detach(), so L_task trains F_up alone and the only loss that reaches F_low is the meeting term; before that
+    step the network trains by ordinary backprop and the meeting term is off (G is trained from step 0, so it is ready at the
+    switch). L_meet is a SUM over the d_mid dimensions and a mean over the batch (not the mean over dimensions of arm D, which
+    divides the gradient by d_mid and makes AdamW's epsilon matter when F_low has no other signal), with weight `lam_meet`
+    (default 1.0) and no ramp. Returns (total, parts, h, z) like compute_losses."""
+    h = model.low(x)
+    cut = step >= cfg.get("replace_start", 0)
+    e_y = F.one_hot(y, model.n_cls).float()
+    zero = torch.zeros((), device=h.device)
+    if model.arm == "meet_replace_oracle":
+        if cut:
+            h_in = h.detach().requires_grad_(True).view_as(h)    # a non-leaf view: autograd.grad on a leaf fails under FlopCounterMode
+            z = model.up(h_in)
+            task = F.cross_entropy(z, y)
+            g_h = torch.autograd.grad(task, h_in, retain_graph=True)[0]      # exact task gradient at h (not given to F_low)
+            c = oracle.coefficients(model, h.detach(), z.detach().softmax(-1), e_y, g_h, cfg, step)
+            L_meet = oracle.surrogate(h, c)
+        else:
+            z = model.up(h)
+            task, L_meet = F.cross_entropy(z, y), zero
+        return task + L_meet, {"task": task, "meet": L_meet}, h, z
+    z = model.up(h.detach() if cut else h)
+    task = F.cross_entropy(z, y)
+    h_d, p = h.detach(), z.detach().softmax(-1)
+    if model.arm == "meet_replace_frozen":
+        with torch.no_grad():
+            b = h_d + model.G(e_y) - model.G(p)
+        L_inv, lam_inv = zero, 0.0
+    else:
+        gp = model.G(p)                                   # trained via L_inv
+        L_inv, lam_inv = F.mse_loss(gp, h_d), cfg["lam_inv"]
+        with torch.no_grad():
+            b = h_d + model.G(e_y) - gp.detach()
+    if cut:
+        L_meet = ((h - b) ** 2).sum(dim=1).mean()
+        total = task + lam_inv * L_inv + cfg.get("lam_meet", 1.0) * L_meet
+    else:
+        L_meet = ((h_d - b) ** 2).sum(dim=1).mean()       # logged only
+        total = task + lam_inv * L_inv
+    return total, {"task": task, "inv": L_inv, "meet": L_meet}, h, z
+
+
 def compute_losses(model, x, y, cfg, step):
     """Returns (total_loss, dict_of_parts, h, z).
 
     cfg keys used: lam_inv, lam_meet, warmup_steps (meet arms); lam_aux, aux_sched, aux_gamma,
     max_steps (arms B, C); sigma_inv (V1); eta_hat (meet_grad); rho (required) and rho_warmup_steps
-    (default 200), lam_inv (meet_rho). Missing optional keys default
+    (default 200), lam_inv (meet_rho); oracle_type, oracle_rho (required), oracle_warmup_steps (default 0),
+    oracle_alpha_mult (default 1), oracle_bound (none | radial) (meet_oracle, meet_replace_oracle); replace_start
+    (default 0), lam_meet (default 1.0), lam_inv (meet_replace) (check D arms). Missing optional keys default
     to the values in docs/METHOD.md.
     """
+    if model.arm in REPLACE_ARMS:
+        return _replace_losses(model, x, y, cfg, step)
     h = model.low(x)
     z = model.up(h)
     parts = {"task": F.cross_entropy(z, y)}
@@ -148,6 +212,18 @@ def compute_losses(model, x, y, cfg, step):
         b = (h - cfg.get("eta_hat", 0.1) * h.shape[0] * g_h).detach()
         L_meet = F.mse_loss(h, b)
         total = total + cfg["lam_meet"] * ramp * L_meet
+        parts["meet"] = L_meet
+
+    elif model.arm == "meet_oracle":
+        # Check B: an exact oracle direction next to backprop, strength rho times the task gradient at h (src/oracle.py).
+        # oracle_type grad is the repaired control F': the lower layers see (1 + rho) times backprop's gradient on h.
+        h_d = h.detach()
+        p = z.detach().softmax(-1)
+        e_y = F.one_hot(y, model.n_cls).float()
+        g_h = torch.autograd.grad(parts["task"], h, retain_graph=True)[0]
+        c = oracle.coefficients(model, h_d, p, e_y, g_h, cfg, step)
+        L_meet = oracle.surrogate(h, c)
+        total = total + L_meet
         parts["meet"] = L_meet
 
     elif model.arm == "deepsup":

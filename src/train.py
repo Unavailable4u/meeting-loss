@@ -20,7 +20,7 @@ import yaml
 from src.crossing import DEFAULT_CROSSING, crossing_index
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
-from src.model import MEET_ARMS, MeetNet, compute_losses
+from src.model import MEET_ARMS, ROOT_CAUSE_ARMS, MeetNet, compute_losses
 from src.selective import OsgdSchedule, selective_step
 from src.utils import set_seed
 
@@ -130,7 +130,7 @@ def run(cfg, device="cpu", data=None):
                 row = dict(step=step, flops=cum_flops, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),
                            **{k: v.item() for k, v in parts.items()})
-                if cfg["arm"] in MEET_ARMS or cfg["arm"] in ("meet_grad", "meet_rho"):
+                if cfg["arm"] in MEET_ARMS or cfg["arm"] in ("meet_grad", "meet_rho") + ROOT_CAUSE_ARMS:
                     row["align"] = grad_alignment(model, x, y, cfg)
                     row["h_var"] = mid_state_variance(model, x)
                 log.append(row)
