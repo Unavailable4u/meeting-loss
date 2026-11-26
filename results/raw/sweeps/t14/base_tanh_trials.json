@@ -1,0 +1,138 @@
+{
+ "tag": "t14",
+ "arm": "base_tanh",
+ "n_trials": 25,
+ "max_steps": 3000,
+ "seeds": [
+  14000,
+  14001
+ ],
+ "selection_target": 0.975,
+ "trials": [
+  {
+   "lr": 0.000109122,
+   "wd": 4.92477e-06,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000758016,
+   "wd": 1.03122e-05,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.00158339,
+   "wd": 0.000272139,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.00769043,
+   "wd": 0.00730726,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00110469,
+   "wd": 1.01725e-05,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000921151,
+   "wd": 0.000330868,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00150906,
+   "wd": 1.88969e-05,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000367189,
+   "wd": 0.000271267,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00277922,
+   "wd": 3.34555e-06,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00148801,
+   "wd": 1.41862e-06,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00031353,
+   "wd": 0.00369841,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000917875,
+   "wd": 6.31658e-05,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00137074,
+   "wd": 0.000940383,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000106253,
+   "wd": 0.00253841,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.000621311,
+   "wd": 0.00149317,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00581338,
+   "wd": 1.17361e-06,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000432536,
+   "wd": 0.00370417,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.0017105,
+   "wd": 0.000294732,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.00047058,
+   "wd": 1.15887e-06,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.00158601,
+   "wd": 1.23008e-06,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00162767,
+   "wd": 0.00054254,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.00533996,
+   "wd": 7.50192e-05,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00204521,
+   "wd": 0.00181361,
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.000962182,
+   "wd": 2.49805e-05,
+   "lr_schedule": "constant"
+  },
+  {
+   "lr": 0.000145955,
+   "wd": 1.51114e-06,
+   "lr_schedule": "constant"
+  }
+ ]
+}
