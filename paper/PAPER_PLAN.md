@@ -31,6 +31,8 @@ The first study (D-019, pre-registered, confirmatory) already stands. Everything
 
 Without one of these, keep one paper. Re-check this list whenever a check or the selective test is logged.
 
+Re-checked 2026-11-26 (checks B and D, E-029, E-030): trigger 2 is not met. Check B ended NO HELP in relu (INCONCLUSIVE in tanh) and the replacement test found no sufficiency, so there is no positive mechanism finding that needs its own confirmatory study; the mechanism material stays a section of the one paper.
+
 ## Writing order (GUIDE section 7)
 
 Method and Setup now (stable). Related work as the reading is verified. Results as each finding is logged. Introduction and abstract last. Limitations continuously.

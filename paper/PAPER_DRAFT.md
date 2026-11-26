@@ -12,11 +12,11 @@ One paper, not two: see paper/PAPER_PLAN.md (split triggers). [C-xx] marks with 
 
 # Which Ideas Actually Save Compute? A Pre-Registered, Compute-Matched Study of a Target-Propagation Auxiliary Loss and a Selective Backward Pass (working title)
 
-Status: draft | Version: v0.2 | Last checked against FINDINGS: 2026-10-25
+Status: draft | Version: v0.3 | Last checked against FINDINGS: 2026-11-26 (Sec. 3.2, 5.2, 5.5, 6, 7 and the abstract's mechanism sentence only; the selective-backward parts still read as of 2026-10-25 and must be re-checked against C-21 to C-33)
 
 ## Abstract
 Status: skeleton | Depends on: all sections | Checked: 2026-10-25
-Problem: claims that a training idea saves compute are easy to make and hard to trust (tuning noise, unfair baselines, uncounted costs). Study 1: an auxiliary target loss next to backpropagation did not reduce FLOPs-to-target against a tuned baseline; it needed about 36% more [C-09], although its gradient is aligned with the task gradient [C-03]. Mechanism: [C-15 to C-19, planned]. Study 2: a selective backward pass over the highest-loss rows [C-21, planned; pilot C-13]. Protocol lessons: [C-10, C-11, C-12]. Scope: one MNIST MLP unless stated [C-24]. Write this last.
+Problem: claims that a training idea saves compute are easy to make and hard to trust (tuning noise, unfair baselines, uncounted costs). Study 1: an auxiliary target loss next to backpropagation did not reduce FLOPs-to-target against a tuned baseline; it needed about 36% more [C-09], although its gradient is aligned with the task gradient [C-03]. Mechanism (exploratory): the signal is aligned with the task gradient and lives on the same rows as the task gradient [C-03, C-15, C-16]; no dose of it helped [C-17]; an exact or damped inverse next to backpropagation did not help in relu [C-18]; with backpropagation cut, the learned inverse trained the lower layers no better than a frozen random one [C-19]; the working explanation is redundancy, not proven. Study 2: a selective backward pass over the highest-loss rows [C-21, planned; pilot C-13]. Protocol lessons: [C-10, C-11, C-12]. Scope: one MNIST MLP unless stated [C-24]. Write this last.
 
 ## 1. Introduction
 Status: skeleton | Depends on: H1 to H4, H6, LITERATURE | Checked: 2026-10-25
@@ -50,7 +50,7 @@ L      = L_task + lam_inv * L_inv + lam_meet(t) * L_meet,   lam_meet(t) = lam_me
 The auxiliary use (backpropagation kept for `L_task`) is the difference from earlier work [C-05].
 
 ### 3.2 Arms and controls
-A plain network; B deep supervision (companion head on `h`); C autoencoder auxiliary; D the meeting loss; E a lower-layer learning-rate control; F an exact-gradient-target control (a near-inert negative control whose scale must be set explicitly [C-12]); variants V1 (noisy inverse), V2 (augmented output), V3 (frozen random `G`). Definitions: `docs/METHOD.md`.
+A plain network; B deep supervision (companion head on `h`); C autoencoder auxiliary; D the meeting loss; E a lower-layer learning-rate control; F an exact-gradient-target control (near-inert as defined, because its scale is tied to `lam_meet`; the repaired control F' adds the exact gradient at an explicit multiple of the task gradient and is also inert [C-12]); variants V1 (noisy inverse), V2 (augmented output), V3 (frozen random `G`). Definitions: `docs/METHOD.md`.
 
 ### 3.3 The selective backward arm (S)
 Forward pass on the whole batch under no gradient, keeping the activations; per-example losses come for free. Select `k = ceil(sel_frac * B)` rows, the highest-loss ones (or random rows as a control); run a hand-written backward pass for the plain MLP on the selected rows only, with the gradient divided by the full batch size; use the full backward pass during a short warm-up. The hand-written backward matches autograd exactly and the FLOP count is exact [C-25].
@@ -75,7 +75,7 @@ Status: draft | Depends on: F-009 to F-012, E-008 to E-010 | Checked: 2026-10-25
 The meeting loss needed about 36% more FLOPs than the tuned baseline to reach 97.0% and 97.5% validation accuracy, with paired-bootstrap intervals that exclude any gain [C-09]. The pre-registered outcome of the first hypothesis is "refuted". The result is conditional on the tuned configurations, AdamW and this model.
 
 ### 5.2 Other auxiliaries and controls
-Deep supervision did not beat the tuned baseline at the primary targets; its selection-level lead did not replicate [C-08]. Control F is nearly inert by construction [C-12]. The autoencoder auxiliary costs more than any other arm per step [C-07].
+Deep supervision did not beat the tuned baseline at the primary targets; its selection-level lead did not replicate [C-08]. Control F is nearly inert by construction, and the repaired control F' (exact gradient at 0.3 to 3 times the task gradient) did not change steps-to-target either [C-12]. The autoencoder auxiliary costs more than any other arm per step [C-07].
 
 ### 5.3 Deep plain network with SGD
 Planned (check C): [C-20].
@@ -84,19 +84,20 @@ Planned (check C): [C-20].
 Status of this subsection: pilot only. A 3-seed pilot with the baseline's tuned hyperparameters reached the targets at a fraction of the baseline's FLOPs, and random rows of the same count did worse [C-13]; the highest-loss rows carry nearly all of the gradient norm after the early phase [C-14]. These are exploratory. Three further exploratory looks (3 seeds each) qualify the pilot: a plain smaller batch does not clearly beat batch 128, and selective backward keeps an advantage over the best small batch that is smaller than its advantage over the baseline [C-22]; the per-step wall-clock saving on one CPU is much smaller than the FLOPs saving [C-23]; and the FLOPs-to-target is flat across the kept fractions 0.1 to 0.3 [C-26]. The pre-registered test [C-21] and a second setting [C-24] are planned. Do not state any selective-backward result as established until [C-21] has a supported outcome.
 
 ### 5.5 Tuning noise and protocol lessons
-Re-tuning the baseline gave a configuration that tied at selection but differed on fresh seeds [C-10]; rankings depend on how "reaching a target" is defined [C-11].
+Re-tuning the baseline gave a configuration that tied at selection but differed on fresh seeds [C-10]; in the oracle checks two tunings of the baseline in relu again differed by 27% in steps, and a tanh baseline tuned in tanh was 18% slower than the relu one, which makes the tanh verdicts weaker than the relu ones [C-34]; rankings depend on how "reaching a target" is defined [C-11].
 
 ## 6. Analysis (mechanism)
-Status: skeleton | Depends on: F-IDs of Stage 4, checks A, L, G0, B, C, D | Checked: 2026-10-25
-- The auxiliary gradient is positively aligned with the task gradient [C-03], yet gives no gain [C-09]: the working explanation is redundancy (an interpretation until tested).
+Status: draft | Depends on: F-IDs of Stage 4, checks A, L, G0, G1, G2, B, D (C not run) | Checked: 2026-11-26
+- The auxiliary gradient is positively aligned with the task gradient [C-03], yet gives no gain [C-09]: the working explanation is redundancy. It is now supported by checks B and D but still an interpretation: the signal is about 0.1% of the task gradient at its tuned weight [C-15, report ch. 6 correction], no strength helps [C-17], an exact or damped inverse next to backpropagation does not help in relu [C-18], and with backpropagation cut the learned inverse is no better than a frozen random one [C-19].
 - Geometry of the signal: parallel and orthogonal parts, Gauss-Newton direction [C-15].
 - Link to selective backward: is the meeting gradient already concentrated on the rows backprop uses? [C-16]
-- Dose-response at fixed hyperparameters [C-17]; oracle target [C-18]; sufficiency with backpropagation cut [C-19].
+- Dose-response at fixed hyperparameters [C-17]; oracle direction next to backpropagation (exact gradient, damped inverse, bounded Gauss-Newton direction; relu NO HELP, tanh inconclusive) [C-18]; replacement with backpropagation cut (nothing reaches 97.5%; learned no better than random; relu collapsed) [C-19]. Report all verdicts as exploratory, with the tuning-noise caveat [C-34].
 - Ablations and variants V1 to V3 (all listed in the appendix).
 
 ## 7. Limitations
 Status: draft | Checked: 2026-10-25
 - One MLP on MNIST, AdamW, 3,000 steps; the deep network, SGD and a second setting are separate, planned checks [C-20] [C-24].
+- The mechanism checks (C-15 to C-19) are exploratory with 3 to 10 seeds; the tanh baseline has one tuning, the relu replacement runs collapsed, and no check isolates why the signal is redundant [C-18] [C-19] [C-34].
 - Conditional on tuned configurations; two tunings of the baseline already differ noticeably on fresh seeds [C-10].
 - FLOPs, not wall-clock, unless stated [C-23].
 - Exploratory checks do not carry the weight of the pre-registered test (D-015).

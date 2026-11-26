@@ -247,3 +247,30 @@ Rules:
 - Scope: as F-025 (MNIST MLP, A1's hyperparameters for S arms, tuned SBT, FLOPs)
 - Implications: (1) Dropping the warm-up pays twice, by not spending full steps (arithmetic) and by reaching the target in about 7% to 9% fewer steps (a learning effect that look 2 could not separate from zero and 40 seeds can). (2) A warm-up of 10 steps is as good as none in two groups of seeds (look 2 and here), so nothing in the data favours a long warm-up; this does not explain why and does not cover 25 steps, which look 2 found worse. The optimizer-state and step-at-zero explanations (F-024) stay unsupported. (3) Between kept fractions 0.15 and 0.2 the data do not decide (a few percent at most); the choice of 0.2 is not shown to be better than 0.15 and 0.2 was not tuned. (4) Selection by loss, not by chance, produces the saving (random rows are worse than the baseline). (5) Tuned Selective-Backprop is not a cheaper route than A1 in uncached FLOPs; its advantage is in the number of updates, which matters only if an update's cost (in time) is dominated by something that FLOPs do not count (not measured here). Replaces nothing; adds to F-022 and F-023.
 - Found / last re-verified: 2026-10-31 (recomputed from the raw logs on a fresh clone at b7cda46)
+
+## F-027: Next to backpropagation, no oracle signal (exact gradient, damped inverse, bounded Gauss-Newton direction) speeds up training in relu, and the exact gradient is inert at any strength (check B)
+- Type: exploratory
+- Status: tentative
+- Confidence: medium for relu (10 paired seeds, intervals mostly inside about +-9%, three signal types agree); low for tanh (single tuning of the baseline, verdict INCONCLUSIVE)
+- Evidence: E-029. Relu, steps to 0.97 / 0.975 against arm A: F' -1.6% / -1.4%, Q -0.5% / +4.0%, Pr +0.5% / +2.9% (all intervals contain 0); P diverges without a bound (h_var 4e3, no run reached 0.97). Phase 1 (3 seeds): F' at rho 0.3, 1, 3 within about 12% of A in both activations. Tanh: F' -6.6% / +4.7%, Q +0.4% / -1.6%, Pr +9.7% / +8.2%, P +24.7% / +39.2%; the only difference that excludes 0 in the helpful direction is Q at lr x0.5 in tanh at 0.97 (-11.8% [-18.6, -3.9]), not at 0.975 and without a matched arm A control. Verdicts by the rule fixed in advance: relu NO HELP, tanh INCONCLUSIVE, phase 3 INCONCLUSIVE in both.
+- Scope: MNIST MLP, AdamW, 3,000 steps, the baseline's tuned configuration in each activation, 10 paired seeds (710 to 719), oracle directions from the exact Jacobian in float64, strength chosen on 3 other seeds.
+- Implications: the Study 1 null is not caused by the quality of the learned inverse, nor by the strength of the signal (with F-014): the signal does not help whether learned or exact, small or strong. The comparison to read is the paired one against A; the oracle arms against A2 look 21% to 23% faster only because A2 is a worse tuning (A2 against A +27.1%), a reminder that tuning noise (C-10) is as large as the effects tested. Feeds C-12, C-18.
+- Found / last re-verified: 2026-11-26 (analysis re-run from the committed raw logs, tables identical)
+
+## F-028: With backpropagation cut at the middle state, the learned inverse trains the lower layers no better than a frozen random one, and nothing reaches 0.975 (check D)
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (10 paired seeds; R1 uses the weak t4 tuning; relu runs collapsed and are uninformative about sufficiency)
+- Evidence: E-030 and E-028. Tanh: R1 reached 0.97 in 5 of 10 seeds and 0.975 in 0 (+100.8% steps), R4 (frozen random G) 8 and 0 (+91.3%), R1w (300 backprop steps first) 10 and 3 (+61.7%), R2 (oracle P) 0 and 0 (final accuracy 0.730); final accuracy of R1, R1w, R4 is 0.970 to 0.973 against 0.979 for A. Relu: R2 and R4 ended at 0.516 and 0.110 with h_var of 1e6 and 9e9. Verdict by the rule fixed in advance: R1 UNCLEAR, R4 PARTIAL, R1w PARTIAL, R2 INSUFFICIENT.
+- Scope: as F-027; replacement means `z = up(h.detach())`, meeting weight 1 (summed squared error); R1's configuration from t4 (selection score 455 GFLOPs, 1 of 2 seeds reaching).
+- Implications: the signal is not sufficient to carry the lower half, and the learned G adds nothing over a fixed random matrix, which fits the redundancy reading and a feedback-alignment-like effect for the part of the signal that does reach the lower layers. It does not show that no replacement works: the relu collapse (a hypothesis: the unbounded squared target) and the weak R1 tuning leave that open. Feeds C-19.
+- Found / last re-verified: 2026-11-26
+
+## F-029: Retuning the baseline in tanh makes the tanh baseline 18% slower than the relu one, and arm D's tanh advantage over it is at most 10% in steps (one target) (checks B and D)
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (one tuning per activation; the relu pair of independent tunings differs by 27%)
+- Evidence: E-029 phase 2: tanh baseline against relu baseline +18.2% [+10.7, +26.6] / +14.5% [+4.9, +24.0] in steps; arm D as tuned in tanh against A in tanh -9.7% [-15.7, -3.3] / -0.6% [-8.2, +8.6], against A in relu +6.8% [-0.5, +14.6] / +13.8% [+7.8, +20.0]; E-028 (t13 winner 240.3 GFLOPs). A2 against A in relu +27.1% [+22.4, +31.8] / +19.2% [+11.1, +26.4] (same code, two tunings).
+- Scope: as F-027, steps and not FLOPs; arm D costs 22.9% more FLOPs per step (C-07).
+- Implications: when the baseline is tuned in the same activation, arm D's tanh advantage shrinks to about 10% in steps at one target and about 0 at the other, which is a loss in FLOPs once the per-step cost is counted (about +11% at 0.97, +23% at 0.975). It is a descriptive comparison of arm D with its tanh tuning, not a test. Tuning noise between two independent tunings (27%) is larger than any oracle effect, so a tanh A2 is needed before reading tanh verdicts. Feeds C-34.
+- Found / last re-verified: 2026-11-26
