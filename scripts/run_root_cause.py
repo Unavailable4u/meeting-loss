@@ -4,6 +4,9 @@ Registered tags (exploratory/oracle.py TAGS):
   mb1  check B: oracle directions next to backprop (F' exact gradient, P pinv, Q damped logit, Pr = P bounded), relu and tanh
        phase 1 screen rho (seeds 700-702), phase 2 test (seeds 710-719), phase 3 lr x 0.5 / 2 on P and Q
   md1  check D: replacement (backprop cut at h): R1 learned G (tuned), R1w with backprop first, R2 oracle P, R4 frozen random G
+  mb2  follow-up of check B in tanh (D-029): A, A at lr x0.5 (matched control), A2 (second tuning, t14), F', Q, Q at lr x0.5; seeds 720-729
+  md2  follow-up of check D in relu with the radially bounded meeting gradient (D-029): R1b (learned G, tuned t15), R4b, R2q, R2qb,
+       R2pb against arm A; seeds 930-939
 
 Order (full commands in the note):
   python scripts/run_sweep.py --tag t13 --arms base_tanh ...      # tuned tanh baseline        (then analyze.py select --write-configs)
@@ -11,6 +14,8 @@ Order (full commands in the note):
   python scripts/run_root_cause.py --tag mb1 --phase 1 --workers 4 [--write-configs first, commit the configs]
   python scripts/run_root_cause.py --tag mb1 --phase 1 --analyze-only --write-chosen
   python scripts/run_root_cause.py --tag mb1 --phase 2 ... ; --phase 3 ... ; --tag md1 ...
+  follow-ups: run_sweep.py --tag t14 --arms base_tanh --seeds 14000 14001 ; --tag t15 --arms meet_replace_rb --seeds 15000 15001
+              (each then analyze.py select --write-configs), then run_root_cause.py --tag mb2 ... and --tag md2 ...
 
 Options: --dry-run (what would run), --limit N, --analyze-only, --write-configs (writes configs/oracle/<tag>_<group>.yaml from
 the derivation in exploratory/oracle.py; the files are checked against it before every run), --settings relu tanh (default both).
@@ -96,7 +101,11 @@ def write_csv(specs, scores, path, n_boot=10000):
 def analyze(args, out_dir, specs, settings):
     tag, check = args.tag, oracle.tag_spec(args.tag)["check"]
     scores = {s["name"]: oracle.load_group(out_dir, tag, s) for s in specs}
-    if check == "D":
+    if check == "B2":
+        print("\n" + oracle.report_b2(oracle.analyze_b2(specs, scores)))
+    elif check == "D2":
+        print("\n" + oracle.report_replace(oracle.analyze_d2(specs, scores)))
+    elif check == "D":
         res = oracle.analyze_replace(specs, scores)
         print("\n" + oracle.report_replace(res))
     elif args.phase == 1:
@@ -124,7 +133,7 @@ def analyze(args, out_dir, specs, settings):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tag", required=True, help="mb1 (check B) or md1 (check D)")
+    ap.add_argument("--tag", required=True, help="mb1 (check B), md1 (check D), mb2 (B in tanh, follow-up), md2 (bounded replacement)")
     ap.add_argument("--phase", type=int, default=1, help="check B only: 1 screen, 2 test, 3 lr (check D has one phase)")
     ap.add_argument("--settings", nargs="+", choices=oracle.SETTINGS, default=list(oracle.SETTINGS))
     ap.add_argument("--seeds", nargs="+", type=int, default=None, help="default: the seeds of the tag and phase")
@@ -144,7 +153,7 @@ def main():
     if args.tag not in oracle.TAGS and not args.tag.startswith("smoke"):
         sys.exit(f"unknown tag {args.tag!r}: register it in exploratory/oracle.py TAGS and in docs/notes first; "
                  f"known tags: {', '.join(oracle.TAGS)}")
-    if oracle.tag_spec(args.tag)["check"] == "D":
+    if oracle.single_phase(args.tag):
         args.phase = 1
     if args.phase not in oracle.tag_spec(args.tag)["seeds"]:
         sys.exit(f"phase {args.phase} does not exist for tag {args.tag}")

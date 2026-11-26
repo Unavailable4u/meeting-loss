@@ -94,6 +94,12 @@ def _unit(u):
     return u / u.norm(dim=1, keepdim=True).clamp_min(1e-12)
 
 
+def remove_radial(v, h):
+    """v with its component along h removed, per row (first-order bound of the scale of h). Zero rows of v stay zero."""
+    h_hat = _unit(h)
+    return v - (v * h_hat).sum(1, keepdim=True) * h_hat
+
+
 def ramp(cfg, step):
     """Linear ramp of the injected signal over `oracle_warmup_steps` (default 0: full strength from the first step; an
     exact oracle has no inverse to learn)."""

@@ -129,7 +129,15 @@ def _replace_losses(model, x, y, cfg, step):
         L_inv, lam_inv = F.mse_loss(gp, h_d), cfg["lam_inv"]
         with torch.no_grad():
             b = h_d + model.G(e_y) - gp.detach()
-    if cut:
+    bound = cfg.get("replace_bound", "none")
+    if bound not in oracle.BOUNDS:
+        raise ValueError(f"unknown replace_bound {bound!r}; choose from {oracle.BOUNDS}")
+    if cut and bound == "radial":
+        # same signal, radial component removed: the gradient at h is 2 (d - (d.h_hat) h_hat) / B with d = h - b = G(p) - G(e_y)
+        d = oracle.remove_radial((h_d - b).detach(), h_d)
+        L_meet = 2.0 * (d * h).sum(dim=1).mean()          # a surrogate: its VALUE is not the squared error, its gradient at h is the bounded one
+        total = task + lam_inv * L_inv + cfg.get("lam_meet", 1.0) * L_meet
+    elif cut:
         L_meet = ((h - b) ** 2).sum(dim=1).mean()
         total = task + lam_inv * L_inv + cfg.get("lam_meet", 1.0) * L_meet
     else:
@@ -145,7 +153,8 @@ def compute_losses(model, x, y, cfg, step):
     max_steps (arms B, C); sigma_inv (V1); eta_hat (meet_grad); rho (required) and rho_warmup_steps
     (default 200), lam_inv (meet_rho); oracle_type, oracle_rho (required), oracle_warmup_steps (default 0),
     oracle_alpha_mult (default 1), oracle_bound (none | radial) (meet_oracle, meet_replace_oracle); replace_start
-    (default 0), lam_meet (default 1.0), lam_inv (meet_replace) (check D arms). Missing optional keys default
+    (default 0), lam_meet (default 1.0), lam_inv, replace_bound (none | radial: the meeting gradient at h without its component
+    along h, follow-up D-029) (meet_replace, meet_replace_frozen) (check D arms). Missing optional keys default
     to the values in docs/METHOD.md.
     """
     if model.arm in REPLACE_ARMS:

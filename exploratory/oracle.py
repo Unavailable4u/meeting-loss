@@ -19,12 +19,24 @@ TAG md1 (check D: replacement, backprop cut at h)   seeds 900-909, one phase
   R1 learned G (tuned, tag t4)   R1w R1 with 300 steps of backprop first   R2 oracle P with rho 1   R4 frozen random G
   A per setting (and A2 in relu) are the references
 
+FOLLOW-UPS (D-029, docs/notes/mechanism-root-cause-2.md), exploratory, fixed before any run:
+TAG mb2 (check B in tanh, seeds 720-729, one phase): the tanh verdict of mb1 was INCONCLUSIVE and read against one tuning of the
+  baseline and no lr-matched control. Groups: A (t13), A-lr0.5 (A at lr x0.5, the matched control), A2 (a second tuning in tanh, t14,
+  noise reference), F (F', rho as chosen in mb1), Q (rho as chosen in mb1), Q-lr0.5 (read against A-lr0.5 and against A).
+TAG md2 (check D with a bounded target in relu, seeds 930-939, one phase): the relu replacement runs of md1 collapsed (accuracy 0.11 to
+  0.52, h_var 1e6 to 1e10). Groups, all against arm A in relu: R1b (learned G, meeting gradient without its radial component, tuned
+  in relu, t15), R4b (frozen random G, bounded), R2q / R2qb (oracle Q, unbounded / bounded), R2pb (oracle P, bounded).
+
 Decision rules (steps-to-target at 0.97 and 0.975, rule `two` of D-018, misses charged the full run, paired change of the mean,
 95% bootstrap interval; both targets must agree):
   B phase 2, per setting. ORACLE HELPS: for some type X in {P, Q, Pr}, at both targets the point change against A is <= -10%, the
     interval excludes 0, the point is <= -10% against A2 too (relu only) and at least 5 points below F'. NO HELP: for every X, at
     both targets the interval's lower end is above -10%. INCONCLUSIVE: anything else (no seeds are added to the same test).
   B phase 3: the same two outcomes for the lr-selected P and Q on seeds 715-719 (5 seeds: wide intervals).
+  mb2: the rule of B phase 2 (decide_oracle) over {Q matched (Q-lr0.5 against A-lr0.5), Q (against A), F (against A)}, no A2 or F
+    condition: TANH ORACLE HELPS / NO HELP / INCONCLUSIVE. A-lr0.5 against A and A2 against A are reported as the size of the lr
+    and of the tuning effect.
+  md2: the rule of D below for every group; the reading (diagnose_bounded) compares each oracle pair with and without the bound.
   D. SUFFICIENT: a group reaches both targets in at least 8 of 10 seeds and its paired mean steps are within +15% of its reference at
     both targets. INSUFFICIENT: it reaches 0.97 in fewer than 5 of 10 seeds, or its final accuracy is more than 1 point below the
     reference's. PARTIAL: it reaches 0.97 in at least 8 seeds but is not SUFFICIENT. UNCLEAR: anything else. (Checked in this order.)
@@ -45,6 +57,8 @@ TARGETS = (0.97, 0.975)
 SETTINGS = ("relu", "tanh")
 BASE_CONFIG = {"relu": "configs/tuned/t1_base_two.yaml", "tanh": "configs/tuned/t13_base_tanh_two.yaml"}
 A2_CONFIG = "configs/tuned/t2_base_two.yaml"
+A2_TANH_CONFIG = "configs/tuned/t14_base_tanh_two.yaml"       # follow-up mb2: second tuning of arm A in tanh
+RB_CONFIG = "configs/tuned/t15_meet_replace_rb_two.yaml"      # follow-up md2: learned replacement with the radial bound, tuned in relu
 D_CONFIG = "configs/tuned/t1_meet_two.yaml"          # arm D as tuned (tanh); descriptive group of phase 2
 R1_CONFIG = "configs/tuned/t4_meet_replace_two.yaml"
 CHOSEN_FILE = "configs/oracle/mb1_chosen_rho.json"
@@ -57,7 +71,16 @@ SUFF_PCT, REACH_OK, REACH_BAD, ACC_GAP = 15.0, 0.8, 0.5, 0.01   # check D (reach
 TAGS = {
     "mb1": dict(check="B", seeds={1: tuple(range(700, 703)), 2: tuple(range(710, 720)), 3: tuple(range(710, 720))}),
     "md1": dict(check="D", seeds={1: tuple(range(900, 910))}),
+    "mb2": dict(check="B2", seeds={1: tuple(range(720, 730))}),
+    "md2": dict(check="D2", seeds={1: tuple(range(930, 940))}),
 }
+ORACLE_TYPE.update({"R2q": "logit", "R2qb": "logit", "R2pb": "pinv"})
+SINGLE_PHASE = ("D", "B2", "D2")
+
+
+def single_phase(tag):
+    """Tags whose check has one phase (the runner forces --phase 1)."""
+    return tag_spec(tag)["check"] in SINGLE_PHASE
 
 
 def tag_spec(tag):
@@ -130,6 +153,16 @@ def group_specs(tag, phase, settings=SETTINGS):
             else:
                 specs += [_spec(k, st, ref, seeds, chosen[st][k], m) for k in ("P", "Q") for m in LR_MULTS]
         return specs
+    if tag_spec(tag)["check"] == "B2":                  # tanh only; rho of F' and Q as chosen in mb1
+        chosen = load_chosen()["tanh"]
+        a, a_half = group_name("A", "tanh"), group_name("A", "tanh", None, 0.5)
+        return [_spec("A", "tanh", None, seeds), _spec("A", "tanh", a, seeds, None, 0.5), _spec("A2", "tanh", a, seeds),
+                _spec("F", "tanh", a, seeds, chosen["F"]), _spec("Q", "tanh", a, seeds, chosen["Q"]),
+                _spec("Q", "tanh", a_half, seeds, chosen["Q"], 0.5)]
+    if tag_spec(tag)["check"] == "D2":                  # relu only; the reference is arm A in relu
+        a = group_name("A", "relu")
+        return [_spec("A", "relu", None, seeds), _spec("R1b", "relu", a, seeds), _spec("R4b", "relu", a, seeds),
+                _spec("R2q", "relu", a, seeds, 1.0), _spec("R2qb", "relu", a, seeds, 1.0), _spec("R2pb", "relu", a, seeds, 1.0)]
     r1 = r1_setting()
     for st in settings:
         specs.append(_spec("A", st, None, seeds))
@@ -143,8 +176,8 @@ def group_specs(tag, phase, settings=SETTINGS):
 def build_config(spec, tag):
     """Derived config of a group. Nothing is tuned here: the base configs are the tuned ones, the check's own keys are added."""
     kind = spec["kind"]
-    rel = (A2_CONFIG if kind == "A2" else R1_CONFIG if kind in ("R1", "R1w") else D_CONFIG if kind == "D"
-           else BASE_CONFIG[spec["setting"]])
+    rel = ((A2_TANH_CONFIG if spec["setting"] == "tanh" else A2_CONFIG) if kind == "A2" else R1_CONFIG if kind in ("R1", "R1w")
+           else RB_CONFIG if kind == "R1b" else D_CONFIG if kind == "D" else BASE_CONFIG[spec["setting"]])
     cfg = copy.deepcopy(_load_yaml(rel))
     cfg["stage"] = stage_name(tag, spec["name"])
     if kind in ("F", "P", "Q", "Pr"):
@@ -160,6 +193,16 @@ def build_config(spec, tag):
                    oracle_bound="none", replace_start=0)
     elif kind == "R4":
         cfg.update(arm="meet_replace_frozen", replace_start=0, lam_meet=1.0)
+    elif kind == "A" and spec["lr_mult"] != 1.0:        # the lr-matched control of follow-up mb2
+        cfg["lr"] = float(f"{cfg['lr'] * spec['lr_mult']:.6g}")
+    elif kind == "R1b":
+        if cfg["arm"] != "meet_replace" or cfg.get("replace_bound") != "radial" or cfg["act"] != "relu":
+            raise ValueError(f"{RB_CONFIG} must be a meet_replace config with replace_bound radial in relu")
+    elif kind == "R4b":
+        cfg.update(arm="meet_replace_frozen", replace_start=0, lam_meet=1.0, replace_bound="radial")
+    elif kind in ("R2q", "R2qb", "R2pb"):
+        cfg.update(arm="meet_replace_oracle", oracle_type=ORACLE_TYPE[kind], oracle_rho=float(spec["rho"]), oracle_warmup_steps=0,
+                   oracle_alpha_mult=1.0, oracle_bound="none" if kind == "R2q" else "radial", replace_start=0)
     return cfg
 
 
@@ -349,7 +392,7 @@ def analyze_phase3(specs3, scores3, scores2, tag, n_boot=10000):
     return out
 
 
-def analyze_replace(specs, scores, n_boot=10000):
+def analyze_replace(specs, scores, n_boot=10000, diagnose=True):
     out = dict(groups={}, diagnosis={})
     for s in specs:
         if s["ref"] is None:
@@ -361,12 +404,62 @@ def analyze_replace(specs, scores, n_boot=10000):
         out["groups"][s["name"]] = dict(ref=s["ref"], change=ch, reached=reached, n=len(g["seeds"]), acc_gap=gap,
                                         verdict=decide_replace(reached, {t: ch[t][0] for t in TARGETS}, gap, len(g["seeds"])),
                                         h_var=g["h_var"], align=g["align"])
+    if not diagnose:
+        return out
     st = r1_setting()
     v = {"R1": out["groups"]["R1"]["verdict"], "R2": out["groups"][group_name("R2", st, 1.0)]["verdict"],
          "R4": out["groups"][group_name("R4", st)]["verdict"]}
     out["diagnosis"] = diagnose_replace(v)
     out["r1_setting"] = st
     return out
+
+
+def analyze_b2(specs, scores, n_boot=10000):
+    """Follow-up mb2: tanh. Q at lr x0.5 is read against A at lr x0.5 (matched) and against A; F' and Q at lr x1 against A."""
+    n = {s["kind"] + ("-half" if s["lr_mult"] != 1.0 else ""): s["name"] for s in specs}
+    a, a_half = scores[n["A"]], scores[n["A-half"]]
+    out = dict(
+        q_matched=change(a_half, scores[n["Q-half"]], n_boot=n_boot), q=change(a, scores[n["Q"]], n_boot=n_boot),
+        q_half_vs_a=change(a, scores[n["Q-half"]], n_boot=n_boot), f=change(a, scores[n["F"]], n_boot=n_boot),
+        lr_effect=change(a, a_half, n_boot=n_boot), a2=change(a, scores[n["A2"]], n_boot=n_boot),
+        reached={k: {t: int(sum(scores[v]["reached"][t])) for t in TARGETS} for k, v in n.items()},
+        n=len(a["seeds"]))
+    out["verdict"] = decide_oracle({"Q matched": out["q_matched"], "Q": out["q"], "F": out["f"]}, None, None)
+    return out
+
+
+def analyze_d2(specs, scores, n_boot=10000):
+    """Follow-up md2: every group against arm A in relu, the rule of check D, and the bounded / unbounded readings."""
+    out = analyze_replace([s for s in specs], scores, n_boot=n_boot, diagnose=False)
+    v = {s["kind"]: out["groups"][s["name"]]["verdict"] for s in specs if s["ref"] is not None}
+    out["diagnosis"] = diagnose_bounded(v)
+    out["r1_setting"] = "relu"
+    return out
+
+
+def diagnose_bounded(v):
+    """Pre-written reading of follow-up md2; v = {'R1b', 'R4b', 'R2q', 'R2qb', 'R2pb'} -> verdict of check D's rule."""
+    ok = ("SUFFICIENT", "PARTIAL")
+    L = []
+    if v["R2q"] == "INSUFFICIENT" and v["R2qb"] in ok:
+        L.append("The bound rescues the oracle Q replacement (R2q INSUFFICIENT, R2qb " + v["R2qb"] + "): the relu collapse is the "
+                 "unbounded drift of h, not the direction.")
+    elif v["R2q"] == "INSUFFICIENT" and v["R2qb"] == "INSUFFICIENT":
+        L.append("The bound does not rescue the oracle Q replacement (both INSUFFICIENT): the collapse in relu is not (only) the radial "
+                 "drift of h.")
+    elif v["R2q"] in ok:
+        L.append("The unbounded oracle Q replacement already trains the lower half (R2q " + v["R2q"] + "): the md1 collapse was specific to "
+                 "the P and random directions.")
+    else:
+        L.append(f"R2q {v['R2q']} / R2qb {v['R2qb']}: outcome unclear, report as it is.")
+    if v["R1b"] in ok or v["R4b"] in ok:
+        L.append(f"A bounded signal trains the lower half to at least 0.97 in relu with a learned or random G (R1b {v['R1b']}, R4b "
+                 f"{v['R4b']}); sufficiency is judged by the verdict, and a speed-up is not claimed.")
+    else:
+        L.append(f"Neither the learned (R1b {v['R1b']}) nor the random (R4b {v['R4b']}) bounded G trains the lower half in relu.")
+    L.append("R1b and R4b have the same verdict (at this resolution the learned G adds nothing over a random feedback matrix)." if v["R1b"] == v["R4b"] else
+             f"R1b ({v['R1b']}) differs from R4b ({v['R4b']}).")
+    return L
 
 
 def _fmt(c):
@@ -408,6 +501,19 @@ def report_phase3(res):
         for k in ("P", "Q"):
             L.append(f"  {st} {k}: lr x{r['picked'][k]:g}  0.97 {_fmt(r['vs_a'][k][0.97])}  0.975 {_fmt(r['vs_a'][k][0.975])}")
         L.append(f"  VERDICT ({st}, phase 3): {r['verdict']}")
+    return "\n".join(L)
+
+
+def report_b2(res):
+    r = res
+    L = ["check B in tanh (mb2): paired change in mean steps-to-target [95% bootstrap interval], percent (negative = fewer steps)",
+         f"  noise and lr effect on arm A:  A2 (second tuning) against A  {_fmt(r['a2'][0.97])} / {_fmt(r['a2'][0.975])};  "
+         f"A at lr x0.5 against A  {_fmt(r['lr_effect'][0.97])} / {_fmt(r['lr_effect'][0.975])}"]
+    for label, key in (("Q lr x0.5 against A lr x0.5 (matched)", "q_matched"), ("Q lr x1 against A", "q"),
+                       ("Q lr x0.5 against A (as phase 3 of mb1)", "q_half_vs_a"), ("F' lr x1 against A", "f")):
+        L.append(f"  {label:<42} 0.97 {_fmt(r[key][0.97]):>24}  0.975 {_fmt(r[key][0.975]):>24}")
+    L.append("  seeds reaching 0.97 / 0.975 (of %d): " % r["n"] + "  ".join(f"{k} {v[0.97]}/{v[0.975]}" for k, v in r["reached"].items()))
+    L.append(f"  VERDICT (tanh, mb2): {r['verdict'].replace('ORACLE', 'TANH ORACLE')}")
     return "\n".join(L)
 
 

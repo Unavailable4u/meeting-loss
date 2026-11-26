@@ -98,6 +98,11 @@ SWEEP_ARMS["selective20w0"] = ("selective", {"sel_frac": 0.2, "sel_warmup": 0, "
 # lam_inv searched, 25 trials, 2 selection seeds).
 SWEEP_ARMS["base_tanh"] = ("base", {"act": "tanh"}, {"act": None})
 SWEEP_ARMS["meet_replace"] = ("meet_replace", {"replace_start": 0, "lam_meet": 1.0}, {"lam_inv": _MEET["lam_inv"]})
+# Follow-ups (D-029). t14: a second, independent tuning of the baseline in tanh (A2 in tanh; seeds differ from t13's). t15: the learned
+# replacement with the radially bounded meeting gradient (`replace_bound` radial), tuned in relu (activation fixed; lr, wd, schedule and
+# lam_inv searched, 25 trials, 2 selection seeds): is the relu collapse of check D (E-030) a matter of the unbounded scale of h?
+SWEEP_ARMS["meet_replace_rb"] = ("meet_replace", {"replace_start": 0, "lam_meet": 1.0, "replace_bound": "radial", "act": "relu"},
+                                 {"lam_inv": _MEET["lam_inv"], "act": None})
 
 
 def expected_steps(arms):

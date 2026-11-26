@@ -169,3 +169,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: none new (D-028 covers the checks; the follow-ups are D-029)
 - Docs updated: [x] PLAN (status log, next actions)  [ ] HYPOTHESES (no change)  [ ] METHOD (no change)  [x] FINDINGS (F-027 to F-029)  [ ] LITERATURE  [ ] RISKS  [x] CLAIMS (C-12, C-18, C-19, C-34)  [x] PAPER_DRAFT  [x] FIGURES  [x] EXPERIMENT_LOG (E-028 to E-030)  [x] DECISIONS (D-028 earlier)  [x] report (ch. 1, 6, 9, 10, abstract)
 - Experiments invalidated or needing rerun: none. The check B and D logs are valid. `scripts/verify_regression.py` for DR-019 has no recorded run in the repo; DR-019 stays open on that point.
+
+## DR-021: Additions to `src/` for the follow-ups: `replace_bound`, `remove_radial`, sweep arm `meet_replace_rb`
+- Date: 2026-11-27
+- Trigger: change under `src/` after the locks of `prereg-v3`; the same procedure as DR-016 and DR-019
+- What changed: before: replacement arms (`meet_replace`, `meet_replace_frozen`) always used the squared-error meeting term. After: the config key `replace_bound` (`none`, the default and the old code path; `radial`: the meeting gradient at h without its component along h, as a surrogate loss) in both arms; `oracle.remove_radial`; sweep arm `meet_replace_rb` (tag t15); `exploratory/oracle.py` and `scripts/run_root_cause.py` gain tags `mb2` and `md2`. A bounded run logs the surrogate's value as `meet`, not the squared error. New tests `tests/test_followups.py` (22); the existing 304 tests are unchanged.
+- Decision recorded: D-029
+- Docs updated: [ ] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS (no result yet)  [ ] LITERATURE  [ ] RISKS  [ ] CLAIMS (nothing changes before the result)  [ ] PAPER_DRAFT  [ ] FIGURES  [x] DECISIONS (D-029)  [x] notes (`mechanism-root-cause-2.md`)  [x] scripts/README.md  [x] CLAUDE.md (test count)
+- Experiments invalidated or needing rerun: none. With `replace_bound` unset every existing arm takes the old code path (test `test_unbounded_replacement_is_unchanged`; the 42 pinned sweep digests of DR-019 still pass, as does the t4 sweep arm). The real-MNIST `scripts/verify_regression.py` has no recorded run for DR-019 or this entry and should be run before the first follow-up run.
