@@ -177,3 +177,11 @@ Every time the work moves away from what the plan, hypotheses, or paper say, rec
 - Decision recorded: D-029
 - Docs updated: [ ] PLAN  [ ] HYPOTHESES  [ ] METHOD  [ ] FINDINGS (no result yet)  [ ] LITERATURE  [ ] RISKS  [ ] CLAIMS (nothing changes before the result)  [ ] PAPER_DRAFT  [ ] FIGURES  [x] DECISIONS (D-029)  [x] notes (`mechanism-root-cause-2.md`)  [x] scripts/README.md  [x] CLAUDE.md (test count)
 - Experiments invalidated or needing rerun: none. With `replace_bound` unset every existing arm takes the old code path (test `test_unbounded_replacement_is_unchanged`; the 42 pinned sweep digests of DR-019 still pass, as does the t4 sweep arm). The real-MNIST `scripts/verify_regression.py` has no recorded run for DR-019 or this entry and should be run before the first follow-up run.
+
+## DR-022: Results of the follow-ups (mb2, md2) change claims C-18, C-19, C-34 and add C-35; F-029's reading amended
+- Date: 2026-11-27
+- Trigger: new evidence (E-031 to E-033, F-030, F-031) that changes claims in `paper/CLAIMS.md`
+- What changed: before: C-18 tanh verdict inconclusive with one tuning of the baseline, C-19 and C-34 as of DR-020, F-029 read the tanh baseline as the reference. After: C-18 extended with the matched-lr tanh result (rule verdict INCONCLUSIVE, matched reading post-hoc), C-19 refers to the bounded replacement, C-34 records that the first tanh baseline was under-tuned by about 16%, C-35 added (bounded replacement in relu); F-030 amends F-029 (F-029 is not deleted: its numbers stand, its use of the t13 baseline as a fair reference does not); `paper/PAPER_DRAFT.md`, `paper/PAPER_PLAN.md`, `docs/PLAN.md`, report chapter 6, abstract and chapters 9 and 10 updated.
+- Decision recorded: none new (D-029)
+- Docs updated: [x] PLAN  [ ] HYPOTHESES  [ ] METHOD  [x] FINDINGS (F-030, F-031)  [ ] LITERATURE  [ ] RISKS  [x] CLAIMS (C-18, C-19, C-34, C-35)  [x] PAPER_DRAFT  [ ] FIGURES  [x] EXPERIMENT_LOG (E-031 to E-033)  [x] DECISIONS (D-029 earlier)  [x] report
+- Experiments invalidated or needing rerun: none are invalid. E-029's tanh comparisons against the t13 baseline (and F-029's arm D figure) should be read with the 16% tuning gap of E-032; they are not rerun. DR-019 and DR-021 still have no recorded real-MNIST `verify_regression.py` run.

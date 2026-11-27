@@ -12,11 +12,11 @@ One paper, not two: see paper/PAPER_PLAN.md (split triggers). [C-xx] marks with 
 
 # Which Ideas Actually Save Compute? A Pre-Registered, Compute-Matched Study of a Target-Propagation Auxiliary Loss and a Selective Backward Pass (working title)
 
-Status: draft | Version: v0.3 | Last checked against FINDINGS: 2026-11-26 (Sec. 3.2, 5.2, 5.5, 6, 7 and the abstract's mechanism sentence only; the selective-backward parts still read as of 2026-10-25 and must be re-checked against C-21 to C-33)
+Status: draft | Version: v0.3 | Last checked against FINDINGS: 2026-11-27 (Sec. 3.2, 5.2, 5.5, 6, 7 and the abstract's mechanism sentence only; the selective-backward parts still read as of 2026-10-25 and must be re-checked against C-21 to C-33)
 
 ## Abstract
 Status: skeleton | Depends on: all sections | Checked: 2026-10-25
-Problem: claims that a training idea saves compute are easy to make and hard to trust (tuning noise, unfair baselines, uncounted costs). Study 1: an auxiliary target loss next to backpropagation did not reduce FLOPs-to-target against a tuned baseline; it needed about 36% more [C-09], although its gradient is aligned with the task gradient [C-03]. Mechanism (exploratory): the signal is aligned with the task gradient and lives on the same rows as the task gradient [C-03, C-15, C-16]; no dose of it helped [C-17]; an exact or damped inverse next to backpropagation did not help in relu [C-18]; with backpropagation cut, the learned inverse trained the lower layers no better than a frozen random one [C-19]; the working explanation is redundancy, not proven. Study 2: a selective backward pass over the highest-loss rows [C-21, planned; pilot C-13]. Protocol lessons: [C-10, C-11, C-12]. Scope: one MNIST MLP unless stated [C-24]. Write this last.
+Problem: claims that a training idea saves compute are easy to make and hard to trust (tuning noise, unfair baselines, uncounted costs). Study 1: an auxiliary target loss next to backpropagation did not reduce FLOPs-to-target against a tuned baseline; it needed about 36% more [C-09], although its gradient is aligned with the task gradient [C-03]. Mechanism (exploratory): the signal is aligned with the task gradient and lives on the same rows as the task gradient [C-03, C-15, C-16]; no dose of it helped [C-17]; an exact or damped inverse next to backpropagation did not help in relu [C-18]; with backpropagation cut, the learned inverse trained the lower layers no better than a frozen random one [C-19], and the relu replacement trains only when the radial component of the meeting gradient is removed, at more steps and no FLOPs saving [C-35]; the working explanation is redundancy, not proven. Study 2: a selective backward pass over the highest-loss rows [C-21, planned; pilot C-13]. Protocol lessons: [C-10, C-11, C-12]. Scope: one MNIST MLP unless stated [C-24]. Write this last.
 
 ## 1. Introduction
 Status: skeleton | Depends on: H1 to H4, H6, LITERATURE | Checked: 2026-10-25
@@ -88,16 +88,16 @@ Re-tuning the baseline gave a configuration that tied at selection but differed 
 
 ## 6. Analysis (mechanism)
 Status: draft | Depends on: F-IDs of Stage 4, checks A, L, G0, G1, G2, B, D (C not run) | Checked: 2026-11-26
-- The auxiliary gradient is positively aligned with the task gradient [C-03], yet gives no gain [C-09]: the working explanation is redundancy. It is now supported by checks B and D but still an interpretation: the signal is about 0.1% of the task gradient at its tuned weight [C-15, report ch. 6 correction], no strength helps [C-17], an exact or damped inverse next to backpropagation does not help in relu [C-18], and with backpropagation cut the learned inverse is no better than a frozen random one [C-19].
+- The auxiliary gradient is positively aligned with the task gradient [C-03], yet gives no gain [C-09]: the working explanation is redundancy. It is now supported by checks B and D but still an interpretation: the signal is about 0.1% of the task gradient at its tuned weight [C-15, report ch. 6 correction], no strength helps [C-17], an exact or damped inverse next to backpropagation does not help in relu, and in tanh not once the learning rate is matched [C-18], and with backpropagation cut the learned inverse is no better than a frozen random one [C-19]; the signal can carry the lower half alone in relu when its radial component is removed, but at 20% to 44% more steps, and the cut saves no FLOPs because the upper half is 13% of the network [C-35].
 - Geometry of the signal: parallel and orthogonal parts, Gauss-Newton direction [C-15].
 - Link to selective backward: is the meeting gradient already concentrated on the rows backprop uses? [C-16]
-- Dose-response at fixed hyperparameters [C-17]; oracle direction next to backpropagation (exact gradient, damped inverse, bounded Gauss-Newton direction; relu NO HELP, tanh inconclusive) [C-18]; replacement with backpropagation cut (nothing reaches 97.5%; learned no better than random; relu collapsed) [C-19]. Report all verdicts as exploratory, with the tuning-noise caveat [C-34].
+- Dose-response at fixed hyperparameters [C-17]; oracle direction next to backpropagation (exact gradient, damped inverse, bounded Gauss-Newton direction; relu NO HELP, tanh inconclusive) [C-18]; replacement with backpropagation cut (nothing reaches 97.5% unbounded; learned no better than random; relu collapsed) [C-19], and with a bounded target in relu (10 of 10 seeds reach 97.5%, +20% to +44% steps, +27% FLOPs for the random inverse) [C-35]. Report all verdicts as exploratory, with the tuning-noise caveat [C-34].
 - Ablations and variants V1 to V3 (all listed in the appendix).
 
 ## 7. Limitations
 Status: draft | Checked: 2026-10-25
 - One MLP on MNIST, AdamW, 3,000 steps; the deep network, SGD and a second setting are separate, planned checks [C-20] [C-24].
-- The mechanism checks (C-15 to C-19) are exploratory with 3 to 10 seeds; the tanh baseline has one tuning, the relu replacement runs collapsed, and no check isolates why the signal is redundant [C-18] [C-19] [C-34].
+- The mechanism checks (C-15 to C-19) are exploratory with 3 to 10 seeds; the tanh baseline was under-tuned by about 16% in the first check and the matched follow-up has an INCONCLUSIVE rule verdict, the unbounded relu replacement collapsed and the bounded one has no tuning of its own for three of five groups, and no check isolates why the signal is redundant [C-18] [C-19] [C-34] [C-35].
 - Conditional on tuned configurations; two tunings of the baseline already differ noticeably on fresh seeds [C-10].
 - FLOPs, not wall-clock, unless stated [C-23].
 - Exploratory checks do not carry the weight of the pre-registered test (D-015).

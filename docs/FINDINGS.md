@@ -274,3 +274,21 @@ Rules:
 - Scope: as F-027, steps and not FLOPs; arm D costs 22.9% more FLOPs per step (C-07).
 - Implications: when the baseline is tuned in the same activation, arm D's tanh advantage shrinks to about 10% in steps at one target and about 0 at the other, which is a loss in FLOPs once the per-step cost is counted (about +11% at 0.97, +23% at 0.975). It is a descriptive comparison of arm D with its tanh tuning, not a test. Tuning noise between two independent tunings (27%) is larger than any oracle effect, so a tanh A2 is needed before reading tanh verdicts. Feeds C-34.
 - Found / last re-verified: 2026-11-26
+
+## F-030: In tanh the oracle signal does not help once the learning rate is matched; the E-029 tanh baseline was under-tuned by about 16% (mb2)
+- Type: exploratory
+- Status: tentative
+- Confidence: medium (10 fresh paired seeds; two tunings of the tanh baseline now agree on the direction; the rule's own verdict is INCONCLUSIVE and the NO HELP reading is post-hoc)
+- Evidence: E-032, E-031. Q at lr x0.5 against A at lr x0.5: +5.7% [-2.1, +13.4] / +5.4% [0.0, +11.6]; F' +0.4% / +4.0%; Q at lr x1 -6.5% / +1.3% (intervals contain 0). A at lr x0.5 -16.4% [-22.2, -9.6] / -8.9% [-16.1, -1.1] and A2 -16.4% [-23.2, -8.9] / -5.3% [-13.5, +4.3] against A. Verdict by the rule fixed in advance: INCONCLUSIVE (the lower interval end of Q at lr x1 against A is -15.6% at 0.97).
+- Scope: as F-027, tanh only, seeds 720 to 729; the matched control is arm A at the halved learning rate of the t13 configuration.
+- Implications: the one favourable tanh difference of F-027 (Q at lr x0.5) was the learning-rate effect, so tanh now agrees with relu: no oracle signal helps next to backpropagation. The t13 baseline was too slow, so E-029's tanh comparisons against it, among them arm D's -9.7% at 0.97, were biased towards the signal arms; with a baseline 16% faster (different seeds) that advantage disappears (amends F-029). Tuning noise between two independent tunings is again about 16% to 27% (relu A2 +27%), larger than any oracle effect.
+- Found / last re-verified: 2026-11-27 (analysis re-run from the committed raw logs, tables identical)
+
+## F-031: With the radial component of the meeting gradient removed, the signal alone trains the lower half in relu (10 of 10 seeds to 97.5%) but at 20% to 44% more steps and no FLOPs saving; the learned G is no better than a random one (md2)
+- Type: exploratory
+- Status: tentative
+- Confidence: low to medium (10 paired seeds; only R1b is tuned; the unbounded collapse of E-030 was on other seeds; a first-order bound)
+- Evidence: E-033, E-030. Reached 0.97 / 0.975: R1b 10/10 and 10/10, R4b 10/10 and 10/10, R2q, R2qb 10/10 and 10/10, R2pb 10/10 and 9/10; steps against A +20% to +44% (0.97) and +20% to +62% (0.975); final accuracy 0.976 to 0.978 against 0.980. FLOPs to target: R4b +28.6% [+13.8, +44.2] / +27.2% [+18.3, +36.3], R1b +69.4% / +57.5%. Verdicts by the rule of check D: PARTIAL for all five.
+- Scope: as F-028 in relu; bounded means the component of the meeting gradient along h removed per example (exact for the oracle arms, first order for the others).
+- Implications: (1) sufficiency is not ruled out (this refines F-028, whose relu runs collapsed): in relu the meeting signal can carry the lower half alone if it is bounded, and the collapse of E-030 is consistent with the unbounded drift of h. (2) It does not pay in this network: the upper half is 13% of the forward multiply-adds, so cutting the backward pass through it saves less than the frozen G costs, and the arms need more steps. (3) The learned inverse again adds nothing over a frozen random one. The remaining open question is a network whose upper half dominates the cost.
+- Found / last re-verified: 2026-11-27
