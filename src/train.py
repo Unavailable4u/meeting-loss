@@ -20,17 +20,20 @@ import yaml
 from src.crossing import DEFAULT_CROSSING, crossing_index
 from src.diagnostics import grad_alignment, mid_state_variance
 from src.flops import flops_per_step
+from src.meetnet import MN_ARMS, build_model
 from src.model import MEET_ARMS, ROOT_CAUSE_ARMS, MeetNet, compute_losses
 from src.selective import OsgdSchedule, selective_step
 from src.utils import set_seed
 
 
 @torch.no_grad()
-def evaluate(model, loader, device):
+def evaluate(model, loader, device, readout=None):
+    """Validation accuracy. `readout` (meeting network only, src/meetnet.py) picks "match" or "fwd"; default: the model's own."""
     model.eval()
     correct = n = 0
     for x, y in loader:
-        pred = model(x.to(device)).argmax(-1).cpu()
+        out = model(x.to(device)) if readout is None else model.predict(x.to(device), readout)
+        pred = out.argmax(-1).cpu()
         correct += (pred == y).sum().item()
         n += y.numel()
     model.train()
@@ -61,7 +64,7 @@ def build_optimizer(model, cfg):
     trainable parameters, and the companion head of arm B in its own group. With default
     settings this is mathematically identical to one AdamW over model.parameters()."""
     lr = cfg["lr"]
-    low = list(model.low.parameters())
+    low = list(model.low.parameters()) if hasattr(model, "low") else []      # the meeting network has no split into low and up
     aux = list(model.aux.parameters()) if hasattr(model, "aux") else []
     skip = {id(p) for p in low + aux}
     rest = [p for p in model.parameters() if p.requires_grad and id(p) not in skip]
@@ -87,7 +90,7 @@ def run(cfg, device="cpu", data=None):
         from src.data import get_data               # imported lazily: needs torchvision
         data = get_data(cfg["batch_size"], cfg["seed"])
     train_loader, val_loader = data
-    model = MeetNet(arm=cfg["arm"], act=cfg.get("act", "relu")).to(device)
+    model = (build_model(cfg) if cfg["arm"] in MN_ARMS else MeetNet(arm=cfg["arm"], act=cfg.get("act", "relu"))).to(device)
     opt, sched = build_optimizer(model, cfg)
     bx, by = next(iter(train_loader))
     fps = flops_per_step(model, opt, (bx.to(device), by.to(device)), cfg)
@@ -130,6 +133,9 @@ def run(cfg, device="cpu", data=None):
                 row = dict(step=step, flops=cum_flops, time=time.time() - t0,
                            val_acc=evaluate(model, val_loader, device),
                            **{k: v.item() for k, v in parts.items()})
+                if cfg["arm"] in MN_ARMS:                 # every readout of the meeting network (val_acc is the primary one)
+                    for r in model.readouts:
+                        row[f"val_acc_{r}"] = evaluate(model, val_loader, device, r)
                 if cfg["arm"] in MEET_ARMS or cfg["arm"] in ("meet_grad", "meet_rho") + ROOT_CAUSE_ARMS:
                     row["align"] = grad_alignment(model, x, y, cfg)
                     row["h_var"] = mid_state_variance(model, x)

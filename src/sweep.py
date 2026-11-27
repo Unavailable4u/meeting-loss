@@ -104,6 +104,21 @@ SWEEP_ARMS["meet_replace"] = ("meet_replace", {"replace_start": 0, "lam_meet": 1
 SWEEP_ARMS["meet_replace_rb"] = ("meet_replace", {"replace_start": 0, "lam_meet": 1.0, "replace_bound": "radial", "act": "relu"},
                                  {"lam_inv": _MEET["lam_inv"], "act": None})
 
+# Study 1b, the meeting network (D-030, DR-023, src/meetnet.py). t16: every arm tuned once, 25 trials, 2 selection seeds, 3,000 steps, the
+# usual four dimensions (lr, wd, act, lr_schedule) plus the cosine scale `mn_scale` of the meeting loss. The meeting node is written into
+# every config (`mn_k`; k = 1 is the equal-cost rule, k = 2 and 3 are the sweep that tests it).
+_MN = {"mn_scale": ("log", 3.0, 30.0)}
+SWEEP_ARMS["mn_match"] = ("mn_match", {"mn_k": 1}, _MN)                                  # matching only, one-hot code
+SWEEP_ARMS["mn_fwd"] = ("mn_fwd", {"mn_k": 1}, _MN)                                      # forward chain continues (readouts fwd and match)
+SWEEP_ARMS["mn_noise"] = ("mn_match", {"mn_k": 1, "mn_code": "noise"}, _MN)              # one-hot plus noise vector
+SWEEP_ARMS["mn_mh"] = ("mn_match", {"mn_k": 1, "mn_code": "multihot"}, _MN)              # fixed +-1 code (control)
+SWEEP_ARMS["mn_table"] = ("mn_table", {"mn_k": 1}, _MN)                                  # ablation: table of free vectors
+SWEEP_ARMS["shallow"] = ("shallow", {"mn_k": 1}, {})                                     # baseline: forward chain + linear head, ordinary CE
+for _k in (2, 3):
+    SWEEP_ARMS[f"mn_match_k{_k}"] = ("mn_match", {"mn_k": _k}, _MN)
+    SWEEP_ARMS[f"mn_fwd_k{_k}"] = ("mn_fwd", {"mn_k": _k}, _MN)
+MN_SWEEP_ARMS = ("mn_match", "mn_fwd", "mn_noise", "mn_mh", "mn_table", "shallow", "mn_match_k2", "mn_fwd_k2", "mn_match_k3", "mn_fwd_k3")
+
 
 def expected_steps(arms):
     """Protocol horizon of a sweep over `arms`. Arms with different horizons need separate tags."""

@@ -157,6 +157,8 @@ def compute_losses(model, x, y, cfg, step):
     along h, follow-up D-029) (meet_replace, meet_replace_frozen) (check D arms). Missing optional keys default
     to the values in docs/METHOD.md.
     """
+    if hasattr(model, "mn_losses"):                  # Study 1b meeting network (src/meetnet.py, D-030)
+        return model.mn_losses(x, y, cfg, step)
     if model.arm in REPLACE_ARMS:
         return _replace_losses(model, x, y, cfg, step)
     h = model.low(x)

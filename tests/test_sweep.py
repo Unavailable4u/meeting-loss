@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from src import sweep
+from src.meetnet import MN_ARMS
 from src.model import ARMS
 from src.train import run
 
@@ -65,7 +66,7 @@ def test_search_space_matches_d014():
 
 def test_every_sweep_arm_maps_to_a_real_arm_and_config_is_complete():
     for name, (arm, fixed, _) in sweep.SWEEP_ARMS.items():
-        assert arm in ARMS, name
+        assert arm in ARMS or arm in MN_ARMS, name           # MN_ARMS: the Study 1b meeting network (D-030)
         cfg = sweep.build_cfg(name, sweep.sample_trials(name, "t1")[0], seed=1000, tag="t1")
         assert cfg["arm"] == arm and cfg["seed"] == 1000 and cfg["max_steps"] == sweep.SWEEP_STEPS
         assert cfg["stage"] == "sweept1"
