@@ -1,6 +1,6 @@
 # Study 1b: the meeting network (a forward chain and a backward chain that meet)
 
-Status: planned, not run | Type: exploratory (D-015) | Decision: D-030 | Drift: DR-023 | Follows: the Study 1 root-cause checks (`mechanism-root-cause.md`, `mechanism-root-cause-2.md`; E-028 to E-033)
+Status: run 2026-11-27 (E-034, E-035; F-032: no group excels) | Type: exploratory (D-015) | Decision: D-030 | Drift: DR-023 | Follows: the Study 1 root-cause checks (`mechanism-root-cause.md`, `mechanism-root-cause-2.md`; E-028 to E-033)
 
 ## Why a new study
 The root-cause checks showed that arm D, as built, is an auxiliary loss on a fixed split: its meeting signal is about 0.1% of the task gradient and redundant next to backprop (F-027 to F-031). That is not the researcher's idea. The idea is: a FORWARD process goes from the input toward a state, a BACKWARD process goes from the desired output toward a state, and the two meet where they meet; the quantity of interest is the agreement of the two sides ("left side = right side"), and the meeting point depends on cost (the NH3 and H2 pipe: the cheaper chain crosses less of the pipe). Study 1 (arm D) stays in the record as the "auxiliary version" and a negative result; this is a new study, 1b.
