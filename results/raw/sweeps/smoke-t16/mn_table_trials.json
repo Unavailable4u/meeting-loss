@@ -1,0 +1,27 @@
+{
+ "tag": "smoke-t16",
+ "arm": "mn_table",
+ "n_trials": 2,
+ "max_steps": 100,
+ "seeds": [
+  100,
+  101
+ ],
+ "selection_target": 0.975,
+ "trials": [
+  {
+   "lr": 0.000107997,
+   "wd": 9.8045e-05,
+   "act": "tanh",
+   "lr_schedule": "constant",
+   "mn_scale": 22.841
+  },
+  {
+   "lr": 0.00174255,
+   "wd": 0.00416843,
+   "act": "relu",
+   "lr_schedule": "constant",
+   "mn_scale": 3.51574
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+{
+ "tag": "smoke-t16",
+ "arm": "shallow",
+ "n_trials": 2,
+ "max_steps": 100,
+ "seeds": [
+  100,
+  101
+ ],
+ "selection_target": 0.975,
+ "trials": [
+  {
+   "lr": 0.00455548,
+   "wd": 0.000207873,
+   "act": "tanh",
+   "lr_schedule": "cosine"
+  },
+  {
+   "lr": 0.00233093,
+   "wd": 0.0012051,
+   "act": "tanh",
+   "lr_schedule": "cosine"
+  }
+ ]
+}
