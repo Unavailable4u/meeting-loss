@@ -1,0 +1,3 @@
+trial,score_flops,n_reached,late_val_acc,lr,wd,act,lr_schedule,mn_scale,s100_steps,s100_flops,s100_final_val,s101_steps,s101_flops,s101_final_val
+1,10472652800.0,0/2,0.8994,0.00174255,0.00416843,relu,constant,3.51574,,,0.9076,,,0.9088
+0,10472652800.0,0/2,0.8546,0.000107997,9.8045e-05,tanh,constant,22.841,,,0.877,,,0.8724
