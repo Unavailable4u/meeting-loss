@@ -49,7 +49,22 @@ def _write_csv(path, rows):
     print(f"wrote {path}")
 
 
+def _selection_target(args):
+    """The explicit --target, else the high target of the arms' dataset (0.975 for MNIST); arms of different datasets need separate tags."""
+    if args.target is not None:
+        return args.target
+    from src.datasets import dataset_targets
+    from src.sweep import arm_dataset
+    arms = args.arms or sorted(p.name[:-len("_trials.json")] for p in (pathlib.Path(args.root) / args.tag).glob("*_trials.json"))
+    sets = {arm_dataset(a) for a in arms}
+    if len(sets) > 1:
+        raise SystemExit(f"arms of different datasets {sorted(sets)} in one selection; use separate tags")
+    ds = sets.pop() if sets else "mnist"
+    return SELECTION_TARGET if ds == "mnist" else dataset_targets(ds)[1]
+
+
 def cmd_select(args):
+    args.target = _selection_target(args)
     data = collect_sweep(args.tag, args.arms, args.root, args.target, args.crossing)
     print(f"crossing rule: {args.crossing} (target {args.target})")
     counts = {a: len(d["trials"]) for a, d in data.items()}
@@ -177,7 +192,8 @@ def main():
     s = sub.add_parser("select", help="pick the best trial per arm from a sweep (D-017, D-018)")
     s.add_argument("--tag", required=True)
     s.add_argument("--arms", nargs="+", default=None, help="default: every arm found in the sweep")
-    s.add_argument("--target", type=float, default=SELECTION_TARGET)
+    s.add_argument("--target", type=float, default=None,
+                   help="selection target; default 0.975 for MNIST arms and the high target of the dataset (src/datasets.py) for the others")
     s.add_argument("--crossing", choices=CROSSINGS, default=DEFAULT_CROSSING,
                    help="what counts as reaching the target (default per D-018; others for sensitivity only)")
     s.add_argument("--root", default=str(SWEEP_ROOT))

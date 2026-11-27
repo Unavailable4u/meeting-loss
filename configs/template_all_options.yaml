@@ -4,6 +4,7 @@
 stage: stage2                  # used in the run id
 arm: meet                      # base (A) | deepsup (B) | ae (C) | meet (D) | meet_ao (V2) | meet_frozen (V3) | meet_grad (F)
 seed: 0
+# dataset: mnist             # mnist (default) | fmnist (src/datasets.py, D-031); targets of a dataset other than mnist come from its probe
 act: relu                      # relu | tanh  (categorical hyperparameter of every arm, D-013)
 lr: 0.001
 wd: 0.0001

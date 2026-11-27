@@ -120,6 +120,22 @@ for _k in (2, 3):
 MN_SWEEP_ARMS = ("mn_match", "mn_fwd", "mn_noise", "mn_mh", "mn_table", "shallow", "mn_match_k2", "mn_fwd_k2", "mn_match_k3", "mn_fwd_k3")
 
 
+# Setting study (D-031): the same methods on another dataset. The arms below are the sweep arms above with `dataset: fmnist` added; each is
+# tuned on the new dataset with the dataset's own targets (src/datasets.py; `analyze.py select` takes the selection target from the arm's
+# dataset). t17: every arm; t18: a second, independent tuning of arm A (the noise reference, as A2 of the MNIST studies).
+FMNIST_SWEEP_ARMS = {"f_base": "base", "f_sb": "sb", "f_meet": "meet", "f_deepsup": "deepsup", "f_shallow": "shallow",
+                     "f_mn_match": "mn_match", "f_mn_fwd": "mn_fwd", "f_mn_table": "mn_table",
+                     "f_mn_match_k2": "mn_match_k2", "f_mn_match_k3": "mn_match_k3", "f_mn_fwd_k3": "mn_fwd_k3"}
+for _new, _old in FMNIST_SWEEP_ARMS.items():
+    _arm, _fixed, _extra = SWEEP_ARMS[_old]
+    SWEEP_ARMS[_new] = (_arm, {**_fixed, "dataset": "fmnist"}, _extra)
+
+
+def arm_dataset(arm):
+    """Dataset a sweep arm runs on (config key `dataset`, default mnist)."""
+    return SWEEP_ARMS[arm][1].get("dataset", "mnist")
+
+
 def expected_steps(arms):
     """Protocol horizon of a sweep over `arms`. Arms with different horizons need separate tags."""
     steps = {ARM_STEPS.get(a, SWEEP_STEPS) for a in arms}

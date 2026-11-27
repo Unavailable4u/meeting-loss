@@ -115,11 +115,12 @@ def find_run(out_dir, cfg, seed):
     return hits[0] if hits else None
 
 
-def load_group(out_dir, tag, spec):
+def load_group(out_dir, tag, spec, targets=TARGETS, cfg=None):
     """Per seed: FLOPs and steps to each target (misses charged the full run), reached, final accuracy (mean of the last LATE_K
-    evaluations), and the late accuracy of every logged readout."""
-    cfg = build_config(spec, tag)
-    g = dict(seeds=list(spec["seeds"]), flops={t: [] for t in TARGETS}, steps={t: [] for t in TARGETS}, reached={t: [] for t in TARGETS},
+    evaluations), and the late accuracy of every logged readout. `targets`: the dataset's two targets (src/datasets.py); `cfg`: the
+    group's config when it is not the one derived here (the setting study, exploratory/setting.py)."""
+    cfg = cfg or build_config(spec, tag)
+    g = dict(seeds=list(spec["seeds"]), flops={t: [] for t in targets}, steps={t: [] for t in targets}, reached={t: [] for t in targets},
              final=[], readouts={}, name=spec["name"])
     missing = []
     for s in spec["seeds"]:
@@ -128,7 +129,7 @@ def load_group(out_dir, tag, spec):
             missing.append(s)
             continue
         rows = _load(p)[1]
-        for t in TARGETS:
+        for t in targets:
             sc = score_run(rows, t, crossing=DEFAULT_CROSSING)
             g["flops"][t].append(float(sc["score"]))
             g["steps"][t].append(sc["steps"] if sc["reached"] else rows[-1]["step"])
@@ -142,69 +143,69 @@ def load_group(out_dir, tag, spec):
     return g
 
 
-def change(ref, grp, key="flops", n_boot=10000):
+def change(ref, grp, key="flops", n_boot=10000, targets=TARGETS):
     """{target: (point, lo, hi)}: paired percent change of the mean `key` (flops or steps) of grp against ref (negative = less)."""
-    return {t: paired_pct_change(ref[key][t], grp[key][t], n_boot=n_boot) for t in TARGETS}
+    return {t: paired_pct_change(ref[key][t], grp[key][t], n_boot=n_boot) for t in targets}
 
 
 # ------------------------------------------------------------------ decision rules
-def decide_group(reached, vs_a, vs_s, acc_gap, n=10):
+def decide_group(reached, vs_a, vs_s, acc_gap, n=10, targets=TARGETS):
     """Group verdict (module docstring). reached[t] = seeds reaching the target; vs_a / vs_s [t] = (point, lo, hi) FLOPs change against
     A / S; acc_gap = A's final accuracy minus the group's (positive = worse)."""
     ok, bad = REACH_OK * n, REACH_BAD * n
-    reach_ok = all(reached[t] >= ok for t in TARGETS)
-    fast = all(c[t][0] <= -EXCEL_PCT and c[t][2] < 0 for c in (vs_a, vs_s) for t in TARGETS)
+    reach_ok = all(reached[t] >= ok for t in targets)
+    fast = all(c[t][0] <= -EXCEL_PCT and c[t][2] < 0 for c in (vs_a, vs_s) for t in targets)
     if reach_ok and fast and acc_gap <= ACC_TOL:
         return "EXCELS"
     if reach_ok and fast:
         return "FASTER, LESS ACCURATE"
-    if reached[TARGETS[0]] < bad or acc_gap > FAIL_ACC:
+    if reached[targets[0]] < bad or acc_gap > FAIL_ACC:
         return "FAILS"
     if reach_ok and acc_gap <= ACC_TOL:
-        if all(max(vs_a[t][0], vs_s[t][0]) <= COMP_PCT for t in TARGETS):
+        if all(max(vs_a[t][0], vs_s[t][0]) <= COMP_PCT for t in targets):
             return "COMPETITIVE"
         return "SLOWER"
     return "UNCLEAR"
 
 
-def _verdict3(ch, lim=EXCEL_PCT):
+def _verdict3(ch, lim=EXCEL_PCT, targets=TARGETS):
     """BETTER / WORSE / SAME / UNCLEAR for a change dict (negative = the group needs less)."""
-    if all(ch[t][0] <= -lim and ch[t][2] < 0 for t in TARGETS):
+    if all(ch[t][0] <= -lim and ch[t][2] < 0 for t in targets):
         return "BETTER"
-    if all(ch[t][0] >= lim and ch[t][1] > 0 for t in TARGETS):
+    if all(ch[t][0] >= lim and ch[t][1] > 0 for t in targets):
         return "WORSE"
-    if all(ch[t][1] > -lim and ch[t][2] < lim for t in TARGETS):
+    if all(ch[t][1] > -lim and ch[t][2] < lim for t in targets):
         return "SAME"
     return "UNCLEAR"
 
 
-def diagnose_study(scores, n_boot=10000):
+def diagnose_study(scores, n_boot=10000, targets=TARGETS):
     """Pre-written readings (module docstring). scores = {group: load_group(...)}; returns a dict of short verdict strings and numbers."""
     out = {}
     if "M1m" not in scores:
         return out
     m = scores["M1m"]
     if "M1t" in scores:
-        v = _verdict3(change(m, scores["M1t"], n_boot=n_boot))          # the table against the chain: WORSE = the chain helps
+        v = _verdict3(change(m, scores["M1t"], n_boot=n_boot, targets=targets), targets=targets)          # the table against the chain: WORSE = the chain helps
         out["chain_vs_table"] = {"WORSE": "CHAIN HELPS", "SAME": "CHAIN NOT NEEDED", "BETTER": "TABLE BETTER"}.get(v, "UNCLEAR")
     for name in ("M1n", "M1h"):
         if name in scores:
-            v = _verdict3(change(m, scores[name], n_boot=n_boot))
+            v = _verdict3(change(m, scores[name], n_boot=n_boot, targets=targets), targets=targets)
             out[f"label_{name}"] = {"BETTER": "RICHER LABEL HELPS", "SAME": "NO EFFECT"}.get(v, "WORSE" if v == "WORSE" else "UNCLEAR")
     if "S" in scores:
-        v = _verdict3(change(scores["S"], m, n_boot=n_boot))
+        v = _verdict3(change(scores["S"], m, n_boot=n_boot, targets=targets), targets=targets)
         out["shallow"] = {"BETTER": "BETTER", "WORSE": "WORSE", "SAME": "SAME AS SHALLOW NET"}.get(v, "UNCLEAR")
     k_eq = equal_cost_k()
     for fam, names in (("match", ("M1m", "M2m", "M3m")), ("fwd", ("M1f", "M2f", "M3f"))):
         have = {i + 1: scores[n] for i, n in enumerate(names) if n in scores}
         if k_eq not in have or len(have) < 2:
             continue
-        means = {k: float(np.mean(g["flops"][TARGETS[1]])) for k, g in have.items()}
+        means = {k: float(np.mean(g["flops"][targets[1]])) for k, g in have.items()}
         best = min(means, key=lambda k: (means[k], k))
         if best == k_eq:
             verdict = "EQUAL-COST RULE CONFIRMED"
         else:
-            pt, lo, hi = paired_pct_change(have[best]["flops"][TARGETS[1]], have[k_eq]["flops"][TARGETS[1]], n_boot=n_boot)
+            pt, lo, hi = paired_pct_change(have[best]["flops"][targets[1]], have[k_eq]["flops"][targets[1]], n_boot=n_boot)
             verdict = "EQUAL-COST RULE CONFIRMED" if lo <= 0 <= hi else "EQUAL-COST RULE NOT CONFIRMED"
         out[f"meeting_point_{fam}"] = dict(verdict=verdict, best_k=best, mean_flops_0975=means)
     if "fwd" in scores.get("M1f", {}).get("readouts", {}) and "match" in scores["M1f"]["readouts"]:
@@ -213,29 +214,29 @@ def diagnose_study(scores, n_boot=10000):
     return out
 
 
-def analyze(scores, n_boot=10000):
+def analyze(scores, n_boot=10000, targets=TARGETS):
     """Everything the report needs: per-group changes against A and S, verdicts, readings."""
-    res = {"groups": {}, "readings": diagnose_study(scores, n_boot)}
+    res = {"groups": {}, "readings": diagnose_study(scores, n_boot, targets)}
     for name, g in scores.items():
         if name in ("A", "S", "D"):
             continue
-        vs_a, vs_s = change(scores["A"], g, n_boot=n_boot), change(scores["S"], g, n_boot=n_boot)
+        vs_a, vs_s = change(scores["A"], g, n_boot=n_boot, targets=targets), change(scores["S"], g, n_boot=n_boot, targets=targets)
         gap = float(np.mean(scores["A"]["final"]) - np.mean(g["final"]))
-        reached = {t: int(sum(g["reached"][t])) for t in TARGETS}
-        res["groups"][name] = dict(verdict=decide_group(reached, vs_a, vs_s, gap, n=len(g["seeds"])), vs_a=vs_a, vs_s=vs_s, acc_gap=gap, reached=reached)
+        reached = {t: int(sum(g["reached"][t])) for t in targets}
+        res["groups"][name] = dict(verdict=decide_group(reached, vs_a, vs_s, gap, n=len(g["seeds"]), targets=targets), vs_a=vs_a, vs_s=vs_s, acc_gap=gap, reached=reached)
     return res
 
 
-def report(scores, res):
-    lines = ["Study 1b, the meeting network (tag mn1; FLOPs to target, misses charged the full run; change against A and against S)"]
+def report(scores, res, targets=TARGETS, title="Study 1b, the meeting network (tag mn1; FLOPs to target, misses charged the full run; change against A and against S)"):
+    lines = [title]
     lines.append(f"{'group':6s} {'reach .97/.975':>14s} {'final acc':>9s}  {'FLOPs .97 vs A / vs S':>24s}  {'FLOPs .975 vs A / vs S':>24s}  verdict")
     for name, g in scores.items():
-        r = f"{sum(g['reached'][TARGETS[0]])}/{len(g['seeds'])} {sum(g['reached'][TARGETS[1]])}/{len(g['seeds'])}"
+        r = f"{sum(g['reached'][targets[0]])}/{len(g['seeds'])} {sum(g['reached'][targets[1]])}/{len(g['seeds'])}"
         row = f"{name:6s} {r:>14s} {np.mean(g['final']):9.4f}  "
         if name in res["groups"]:
             q = res["groups"][name]
             f = lambda c: f"{c[0]:+6.1f}% [{c[1]:+.0f},{c[2]:+.0f}]"
-            row += f"{f(q['vs_a'][TARGETS[0]]):>12s} / {f(q['vs_s'][TARGETS[0]]):>12s}  {f(q['vs_a'][TARGETS[1]]):>12s} / {f(q['vs_s'][TARGETS[1]]):>12s}  {q['verdict']}"
+            row += f"{f(q['vs_a'][targets[0]]):>12s} / {f(q['vs_s'][targets[0]]):>12s}  {f(q['vs_a'][targets[1]]):>12s} / {f(q['vs_s'][targets[1]]):>12s}  {q['verdict']}"
         else:
             row += "(reference)" if name in ("A", "S") else "(descriptive)"
         lines.append(row)

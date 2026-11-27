@@ -76,7 +76,7 @@ def run_sb(cfg, device="cpu", data=None):
     set_seed(cfg["seed"])
     if data is None:
         from src.data import get_data               # imported lazily: needs torchvision
-        data = get_data(cfg["batch_size"], cfg["seed"])
+        data = get_data(cfg["batch_size"], cfg["seed"], **({"dataset": cfg["dataset"]} if "dataset" in cfg else {}))
     train_loader, val_loader = data
     model = MeetNet(arm="sb", act=cfg.get("act", "relu")).to(device)
     opt, sched = build_optimizer(model, cfg)
