@@ -1,0 +1,171 @@
+tag f1: 13 groups, 130 runs; 0 already done, 130 to run (out dir results/raw/setting/f1)
+[1/130] done    A2_s2500  (elapsed     110s)
+[2/130] done    S20_s2500  (elapsed     111s)
+[3/130] done    A_s2500  (elapsed     112s)
+[4/130] done    S_s2500  (elapsed     157s)
+[5/130] done    B_s2500  (elapsed     233s)
+[6/130] done    D_s2500  (elapsed     238s)
+[7/130] done    M1m_s2500  (elapsed     324s)
+[8/130] done    SBT_s2500  (elapsed     350s)
+[9/130] done    M1t_s2500  (elapsed     401s)
+[10/130] done    M1f_s2500  (elapsed     452s)
+[11/130] done    M2m_s2500  (elapsed     487s)
+[12/130] done    M3m_s2500  (elapsed     517s)
+[13/130] done    A_s2501  (elapsed     573s)
+[14/130] done    A2_s2501  (elapsed     610s)
+[15/130] done    M3f_s2500  (elapsed     621s)
+[16/130] done    S_s2501  (elapsed     683s)
+[17/130] done    S20_s2501  (elapsed     693s)
+[18/130] done    D_s2501  (elapsed     749s)
+[19/130] done    B_s2501  (elapsed     807s)
+[20/130] done    SBT_s2501  (elapsed     851s)
+[21/130] done    M1m_s2501  (elapsed     862s)
+[22/130] done    M1t_s2501  (elapsed     969s)
+[23/130] done    M1f_s2501  (elapsed     974s)
+[24/130] done    M2m_s2501  (elapsed    1014s)
+[25/130] done    M3m_s2501  (elapsed    1028s)
+[26/130] done    A_s2502  (elapsed    1095s)
+[27/130] done    A2_s2502  (elapsed    1133s)
+[28/130] done    M3f_s2501  (elapsed    1190s)
+[29/130] done    S_s2502  (elapsed    1190s)
+[30/130] done    S20_s2502  (elapsed    1214s)
+[31/130] done    B_s2502  (elapsed    1315s)
+[32/130] done    D_s2502  (elapsed    1321s)
+[33/130] done    SBT_s2502  (elapsed    1371s)
+[34/130] done    M1m_s2502  (elapsed    1386s)
+[35/130] done    M1t_s2502  (elapsed    1487s)
+[36/130] done    M1f_s2502  (elapsed    1540s)
+[37/130] done    M2m_s2502  (elapsed    1547s)
+[38/130] done    M3m_s2502  (elapsed    1559s)
+[39/130] done    A_s2503  (elapsed    1661s)
+[40/130] done    A2_s2503  (elapsed    1670s)
+[41/130] done    M3f_s2502  (elapsed    1712s)
+[42/130] done    S_s2503  (elapsed    1727s)
+[43/130] done    S20_s2503  (elapsed    1781s)
+[44/130] done    D_s2503  (elapsed    1848s)
+[45/130] done    B_s2503  (elapsed    1857s)
+[46/130] done    SBT_s2503  (elapsed    1921s)
+[47/130] done    M1m_s2503  (elapsed    1952s)
+[48/130] done    M1t_s2503  (elapsed    2023s)
+[49/130] done    M1f_s2503  (elapsed    2075s)
+[50/130] done    M2m_s2503  (elapsed    2093s)
+[51/130] done    M3m_s2503  (elapsed    2129s)
+[52/130] done    A_s2504  (elapsed    2204s)
+[53/130] done    A2_s2504  (elapsed    2221s)
+[54/130] done    M3f_s2503  (elapsed    2254s)
+[55/130] done    S_s2504  (elapsed    2297s)
+[56/130] done    S20_s2504  (elapsed    2327s)
+[57/130] done    D_s2504  (elapsed    2387s)
+[58/130] done    B_s2504  (elapsed    2421s)
+[59/130] done    SBT_s2504  (elapsed    2463s)
+[60/130] done    M1m_s2504  (elapsed    2499s)
+[61/130] done    M1t_s2504  (elapsed    2585s)
+[62/130] done    M1f_s2504  (elapsed    2608s)
+[63/130] done    M2m_s2504  (elapsed    2629s)
+[64/130] done    M3m_s2504  (elapsed    2665s)
+[65/130] done    A_s2505  (elapsed    2726s)
+[66/130] done    A2_s2505  (elapsed    2746s)
+[67/130] done    M3f_s2504  (elapsed    2792s)
+[68/130] done    S_s2505  (elapsed    2824s)
+[69/130] done    S20_s2505  (elapsed    2839s)
+[70/130] done    D_s2505  (elapsed    2920s)
+[71/130] done    B_s2505  (elapsed    2949s)
+[72/130] done    SBT_s2505  (elapsed    2983s)
+[73/130] done    M1m_s2505  (elapsed    3004s)
+[74/130] done    M1t_s2505  (elapsed    3115s)
+[75/130] done    M1f_s2505  (elapsed    3138s)
+[76/130] done    M2m_s2505  (elapsed    3151s)
+[77/130] done    M3m_s2505  (elapsed    3169s)
+[78/130] done    A_s2506  (elapsed    3260s)
+[79/130] done    A2_s2506  (elapsed    3274s)
+[80/130] done    S_s2506  (elapsed    3337s)
+[81/130] done    M3f_s2505  (elapsed    3338s)
+[82/130] done    S20_s2506  (elapsed    3379s)
+[83/130] done    B_s2506  (elapsed    3463s)
+[84/130] done    D_s2506  (elapsed    3471s)
+[85/130] done    SBT_s2506  (elapsed    3526s)
+[86/130] done    M1m_s2506  (elapsed    3549s)
+[87/130] done    M1t_s2506  (elapsed    3643s)
+[88/130] done    M1f_s2506  (elapsed    3694s)
+[89/130] done    M2m_s2506  (elapsed    3697s)
+[90/130] done    M3m_s2506  (elapsed    3724s)
+[91/130] done    A_s2507  (elapsed    3822s)
+[92/130] done    A2_s2507  (elapsed    3824s)
+[93/130] done    M3f_s2506  (elapsed    3868s)
+[94/130] done    S_s2507  (elapsed    3891s)
+[95/130] done    S20_s2507  (elapsed    3940s)
+[96/130] done    D_s2507  (elapsed    3996s)
+[97/130] done    B_s2507  (elapsed    4016s)
+[98/130] done    SBT_s2507  (elapsed    4065s)
+[99/130] done    M1m_s2507  (elapsed    4110s)
+[100/130] done    M1t_s2507  (elapsed    4184s)
+[101/130] done    M1f_s2507  (elapsed    4224s)
+[102/130] done    M2m_s2507  (elapsed    4237s)
+[103/130] done    M3m_s2507  (elapsed    4290s)
+[104/130] done    A_s2508  (elapsed    4350s)
+[105/130] done    A2_s2508  (elapsed    4363s)
+[106/130] done    M3f_s2507  (elapsed    4410s)
+[107/130] done    S_s2508  (elapsed    4459s)
+[108/130] done    S20_s2508  (elapsed    4466s)
+[109/130] done    D_s2508  (elapsed    4531s)
+[110/130] done    B_s2508  (elapsed    4577s)
+[111/130] done    SBT_s2508  (elapsed    4594s)
+[112/130] done    M1m_s2508  (elapsed    4622s)
+[113/130] done    M1t_s2508  (elapsed    4728s)
+[114/130] done    M1f_s2508  (elapsed    4739s)
+[115/130] done    M2m_s2508  (elapsed    4744s)
+[116/130] done    M3m_s2508  (elapsed    4778s)
+[117/130] done    A_s2509  (elapsed    4849s)
+[118/130] done    A2_s2509  (elapsed    4856s)
+[119/130] done    S_s2509  (elapsed    4929s)
+[120/130] done    M3f_s2508  (elapsed    4943s)
+[121/130] done    S20_s2509  (elapsed    4962s)
+[122/130] done    D_s2509  (elapsed    5056s)
+[123/130] done    B_s2509  (elapsed    5061s)
+[124/130] done    SBT_s2509  (elapsed    5088s)
+[125/130] done    M1m_s2509  (elapsed    5116s)
+[126/130] done    M1t_s2509  (elapsed    5210s)
+[127/130] done    M2m_s2509  (elapsed    5247s)
+[128/130] done    M1f_s2509  (elapsed    5259s)
+[129/130] done    M3m_s2509  (elapsed    5266s)
+[130/130] done    M3f_s2509  (elapsed    5373s)
+
+Setting study, tag f1 (dataset fmnist; targets 0.885 / 0.89; FLOPs to target, misses charged the full run)
+group reach lo/hi final acc   GFLOPs lo/hi
+A     10/10 10/10      0.8958   232.6 / 300.0
+A2    10/10 10/10      0.8973   228.7 / 293.8
+S     10/10 10/10      0.8957   159.7 / 205.8
+S20   10/10 1/10      0.8877   215.8 / 257.3
+SBT   10/10 10/10      0.9015   311.4 / 392.9
+D     10/10 10/10      0.8966   316.4 / 372.6
+B     10/10 10/10      0.8952   241.1 / 291.0
+M1m   10/10 10/10      0.8956   182.7 / 219.7
+M1f   10/10 10/10      0.8973   240.5 / 281.7
+M1t   10/10 10/10      0.8964   173.8 / 202.1
+M2m   10/10 10/10      0.8962   209.6 / 256.7
+M3m   10/10 10/10      0.8965   213.3 / 272.3
+M3f   10/10 10/10      0.8973   217.5 / 282.4
+
+Re-tuning shift of A (A2 against A, max_gain): 0.885: 1.7%, 0.89: 2.1%   (A2 against A:   -1.7% [-10,+7],   -2.1% [-6,+2])
+S20 against A:   -7.2% [-15,+3] |  -14.3% [-17,-12]  reached {0.885: 10, 0.89: 1}  ->  INCONCLUSIVE
+D against A:  +36.0% [+24,+49] |  +24.2% [+19,+30]  reached {0.885: 10, 0.89: 10}  ->  NO HELP
+B against A:   +3.7% [-6,+14] |   -3.0% [-12,+5]  reached {0.885: 10, 0.89: 10}  ->  NO HELP
+S20 against SBT:  -30.7% [-35,-26] |  -34.5% [-40,-29]  ->  HOLDS
+
+Study 1b groups (FLOPs change against A and against S)
+group  reach .97/.975 final acc     FLOPs .97 vs A / vs S    FLOPs .975 vs A / vs S  verdict
+A         10/10 10/10    0.8958  (reference)
+S         10/10 10/10    0.8957  (reference)
+M1m       10/10 10/10    0.8956   -21.4% [-28,-13] /  +14.4% [+6,+24]   -26.8% [-29,-24] /   +6.8% [+2,+11]  COMPETITIVE
+M1f       10/10 10/10    0.8973    +3.4% [-6,+18] /  +50.6% [+39,+63]    -6.1% [-11,-2] /  +36.9% [+29,+47]  SLOWER
+M1t       10/10 10/10    0.8964   -25.3% [-31,-19] /   +8.9% [+4,+14]   -32.6% [-36,-29] /   -1.8% [-6,+3]  COMPETITIVE
+M2m       10/10 10/10    0.8962    -9.9% [-17,-1] /  +31.2% [+20,+43]   -14.4% [-17,-12] /  +24.7% [+18,+31]  SLOWER
+M3m       10/10 10/10    0.8965    -8.3% [-17,+2] /  +33.6% [+21,+49]    -9.2% [-16,-3] /  +32.3% [+22,+42]  SLOWER
+M3f       10/10 10/10    0.8973    -6.5% [-14,+2] /  +36.2% [+28,+44]    -5.9% [-12,+0] /  +37.2% [+28,+48]  SLOWER
+
+chain_vs_table: UNCLEAR
+shallow: UNCLEAR
+meeting_point_match: {'verdict': 'EQUAL-COST RULE CONFIRMED', 'best_k': 1, 'mean_flops_0975': {1: 219697397760.0, 2: 256716472320.0, 3: 272306810880.0}}
+meeting_point_fwd: {'verdict': 'EQUAL-COST RULE CONFIRMED', 'best_k': 1, 'mean_flops_0975': {1: 281676533760.0, 3: 282430689280.0}}
+readout: {'verdict': 'FORWARD BETTER', 'fwd_minus_match': 0.0042959999999998555}
+wrote results/processed/setting_f1.csv
